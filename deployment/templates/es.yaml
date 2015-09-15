@@ -1,0 +1,169 @@
+apiVersion: "v1"
+kind: "Template"
+metadata:
+  name: logging-elasticsearch-template-maker
+  annotations:
+    description: "Template to create template for deploying ElasticSearch"
+    tags: "infrastructure"
+objects:
+- apiVersion: "v1"
+  kind: "Template"
+  metadata:
+    name: logging-${ES_CLUSTER_NAME}-template
+    annotations:
+      description: "Template for deploying ElasticSearch with proxy/plugin for storing and retrieving aggregated cluster logs."
+      tags: "infrastructure"
+    labels:
+      logging-infra: elasticsearch
+  labels:
+    logging-infra: elasticsearch
+    provider: openshift
+    component: ${ES_CLUSTER_NAME}
+  objects:
+  - kind: "PersistentVolumeClaim"
+    apiVersion: "v1"
+    metadata:
+      name: ${ES_DEPLOYMENT_NAME}
+    spec:
+      accessModes:
+      - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: ${VOLUME_CAPACITY}
+  -
+    apiVersion: "v1"
+    kind: "DeploymentConfig"
+    metadata:
+      name: ${ES_DEPLOYMENT_NAME}
+    spec:
+      replicas: 1
+      selector:
+        provider: "openshift"
+        component: ${ES_CLUSTER_NAME}
+        deployment: ${ES_DEPLOYMENT_NAME}
+      triggers:
+      - type: ConfigChange
+      - type: ImageChange
+        imageChangeParams:
+          automatic: true
+          containerNames:
+          - elasticsearch
+          from:
+            kind: ImageStreamTag
+            name: logging-elasticsearch:latest
+      - type: ImageChange
+        imageChangeParams:
+          automatic: true
+          containerNames:
+          - es-proxy-mutualtls
+          from:
+            kind: ImageStreamTag
+            name: openshift-auth-proxy:latest
+      strategy:
+        resources: {}
+        rollingParams:
+          intervalSeconds: 1
+          timeoutSeconds: 600
+          updatePeriodSeconds: 1
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            provider: "openshift"
+            component: ${ES_CLUSTER_NAME}
+            deployment: ${ES_DEPLOYMENT_NAME}
+        spec:
+          serviceAccountName: aggregated-logging
+          containers:
+            -
+              name: "elasticsearch"
+              image: logging-elasticsearch
+              imagePullPolicy: Always
+              ports:
+              -
+                containerPort: 9300
+                name: "cluster"
+              env:
+              -
+                name: "KUBERNETES_TRUST_CERT"
+                value: "true"
+              -
+                name: "SERVICE_DNS"
+                value: "logging-${ES_CLUSTER_NAME}-cluster"
+              -
+                name: "CLUSTER_NAME"
+                value: "logging-${ES_CLUSTER_NAME}"
+              volumeMounts:
+                - name: elasticsearch
+                  mountPath: /etc/elasticsearch/keys
+                  readOnly: true
+            -
+              name: "es-proxy-mutualtls"
+              image: openshift-auth-proxy
+              imagePullPolicy: Always
+              ports:
+                -
+                  name: "mutualtls"
+                  containerPort: 3001
+              env:
+                -
+                  name: "OAP_SERVER_PORT"
+                  value: "3001"
+                -
+                  name: "OAP_BACKEND_URL"
+                  value: "http://localhost:9200"
+                -
+                  name: "OAP_AUTH_MODE"
+                  value: "mutual_tls"
+                -
+                  name: "OAP_TRANSFORM"
+                  value: "user_header,kibana_es"
+                -
+                  name: "OAP_TRUST_REMOTE_USER"
+                  value: "true"
+                -
+                  name: "OAP_MASTER_URL"
+                  value: ${OAP_MASTER_URL}
+                -
+                  name: "OAP_MASTER_CA_FILE"
+                  value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                -
+                  name: "OAP_DEBUG"
+                  value: ${OAP_DEBUG}
+              volumeMounts:
+                - name: es-proxy
+                  mountPath: /secret
+                  readOnly: true
+          volumes:
+            - name: elasticsearch
+              secret:
+                secretName: logging-elasticsearch
+            - name: es-proxy
+              secret:
+                secretName: logging-es-proxy
+            - name: elasticsearch-storage
+              persistentVolumeClaim:
+                claimName: ${ES_DEPLOYMENT_NAME}
+  parameters:
+  -
+    description: 'Use to create multiple deployments in order to "scale"; will share services but must have different names.'
+    name: ES_DEPLOYMENT_NAME
+    from: 'logging-${ES_CLUSTER_NAME}-[a-z0-9]{8}'
+    generate: expression
+  -
+    description: "Show extra proxy debug information at startup and during operations"
+    name: OAP_DEBUG
+    value: "false"
+parameters:
+-
+  description: "Internal URL for the master, for authentication retrieval"
+  name: OAP_MASTER_URL
+  value: "https://kubernetes.default.svc.cluster.local"
+-
+  description: 'Vary to create templates for multiple clusters with different identities'
+  name: ES_CLUSTER_NAME
+  value: 'es'
+-
+  description: 'Gigabytes of persistent storage required per instance'
+  name: VOLUME_CAPACITY
+  value: '1'
