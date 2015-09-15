@@ -1,0 +1,111 @@
+apiVersion: "v1"
+kind: "Template"
+metadata:
+  name: logging-support-template
+  annotations:
+    description: "Template for deploying logging support entities: oauth, service accounts, services, routes."
+    tags: "infrastructure"
+labels:
+  logging-infra: support
+  provider: openshift
+  component: support
+objects:
+-
+  apiVersion: v1
+  kind: OAuthClient
+  metadata:
+    name: kibana-proxy
+  secret: ${OAUTH_SECRET}
+  redirectURIs:
+  - https://${KIBANA_HOSTNAME}
+-
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: aggregated-logging
+  secrets:
+    - name: logging-elasticsearch
+    - name: logging-es-proxy
+    - name: logging-kibana
+    - name: logging-kibana-proxy
+-
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: aggregated-logging-fluentd
+  secrets:
+    - name: logging-fluentd
+-
+  apiVersion: "v1"
+  kind: "Service"
+  metadata:
+    name: "logging-es"
+  spec:
+    ports:
+    -
+      port: 9200
+      targetPort: tokenauth
+    selector:
+      provider: "openshift"
+      component: "elasticsearch"
+-
+  apiVersion: "v1"
+  kind: "Service"
+  metadata:
+    name: "logging-es-mutualtls"
+  spec:
+    ports:
+    -
+      port: 9201
+      targetPort: mutualtls
+    selector:
+      provider: "openshift"
+      component: "elasticsearch"
+-
+  apiVersion: "v1"
+  kind: "Service"
+  metadata:
+    name: "logging-es-cluster"
+  spec:
+    portalIP: "None"
+    ports:
+    -
+      port: 9300
+      targetPort: cluster
+    selector:
+      provider: "openshift"
+      component: "elasticsearch"
+-
+  apiVersion: "v1"
+  kind: "Service"
+  metadata:
+    name: "kibana"
+  spec:
+    ports:
+      -
+        port: 443
+        targetPort: "oaproxy"
+    selector:
+      provider: openshift
+      component: "kibana"
+-
+  apiVersion: v1
+  kind: Route
+  metadata:
+    name: kibana
+  spec:
+    host: ${KIBANA_HOSTNAME}
+    to:
+      kind: Service
+      name: kibana
+    tls:
+      termination: passthrough
+parameters:
+-
+  description: "A shared secret for the authentication proxy oauth client in front of Kibana"
+  name: OAUTH_SECRET
+  required: true
+-
+  description: "Hostname at which users will visit Kibana and be authenticated."
+  name: KIBANA_HOSTNAME
+  required: true

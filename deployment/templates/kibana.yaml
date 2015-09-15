@@ -1,0 +1,132 @@
+apiVersion: "v1"
+kind: "Template"
+metadata:
+  name: logging-kibana-template
+  annotations:
+    description: "Template for deploying log viewer Kibana connecting to ElasticSearch to visualize aggregated cluster logs."
+    tags: "infrastructure"
+labels:
+  logging-infra: kibana
+  provider: openshift
+  component: kibana
+objects:
+-
+  apiVersion: "v1"
+  kind: "DeploymentConfig"
+  metadata:
+    name: "logging-kibana"
+    labels:
+      provider: openshift
+      component: "kibana"
+  spec:
+    replicas: 1
+    selector:
+      provider: openshift
+      component: "kibana"
+    triggers:
+    - type: ConfigChange
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        name: "kibana"
+        labels:
+          provider: openshift
+          component: "kibana"
+      spec:
+        serviceAccountName: aggregated-logging
+        containers:
+          -
+            name: "kibana"
+            workingimage: "sosiouxme/openshift-kibana:v0.1"
+            image: ${IMAGE_PREFIX}logging-kibana:${IMAGE_VERSION}
+            imagePullPolicy: Always
+            ports:
+            env:
+              - name: "ES_HOST"
+                value: ${ES_HOST}
+              - name: "ES_PORT"
+                value: ${ES_PORT}
+            volumeMounts:
+              - name: kibana
+                mountPath: /etc/kibana/keys
+                readOnly: true
+          -
+            name: "kibana-proxy"
+            workingimage: "sosiouxme/openshift-auth-proxy:v0.1.8"
+            image: ${IMAGE_PREFIX}openshift-auth-proxy:${IMAGE_VERSION}
+            imagePullPolicy: Always
+            ports:
+              -
+                name: "oaproxy"
+                containerPort: 3000
+            env:
+              -
+                name: "OAP_BACKEND_URL"
+                value: "http://localhost:5601"
+              -
+                name: "OAP_AUTH_MODE"
+                value: "oauth2"
+              -
+                name: "OAP_TRANSFORM"
+                value: "user_header"
+              -
+                name: "OAP_OAUTH_ID"
+                value: kibana-proxy
+              -
+                name: "OAP_MASTER_URL"
+                value: ${OAP_MASTER_URL}
+              -
+                name: "OAP_PUBLIC_MASTER_URL"
+                value: ${OAP_PUBLIC_MASTER_URL}
+              -
+                name: "OAP_MASTER_CA_FILE"
+                value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              -
+                name: "OAP_DEBUG"
+                value: ${OAP_DEBUG}
+            volumeMounts:
+              - name: kibana-proxy
+                mountPath: /secret
+                readOnly: true
+        volumes:
+          - name: kibana
+            secret:
+              secretName: logging-kibana
+          - name: kibana-proxy
+            secret:
+              secretName: logging-kibana-proxy
+parameters:
+-
+  description: 'Specify prefix for logging components; e.g. for "openshift/origin-logging-deployer:v1.1", set prefix "openshift/origin-"'
+  name: IMAGE_PREFIX
+  value: "docker.io/openshift/origin-"
+-
+  description: 'Specify version for logging components; e.g. for "openshift/origin-logging-deployer:v1.1", set version "v1.1"'
+  name: IMAGE_VERSION
+  value: "latest"
+-
+  description: "Internal URL for the master, for authentication retrieval"
+  name: OAP_MASTER_URL
+  value: "https://kubernetes.default.svc.cluster.local"
+-
+  description: "Public URL for the master, for sending the browser to authenticate"
+  name: OAP_PUBLIC_MASTER_URL
+  required: true
+-
+  description: "Hostname/IP for ElasticSearch backend to connect to."
+  name: ES_HOST
+  value: "logging-es-mutualtls"
+-
+  description: "Port to connect to for ElasticSearch backend."
+  name: ES_PORT
+  value: "9201"
+-
+  description: "Show extra proxy debug information at startup and during operations"
+  name: OAP_DEBUG
+  value: "false"

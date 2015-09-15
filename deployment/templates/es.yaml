@@ -1,0 +1,163 @@
+apiVersion: "v1"
+kind: "Template"
+metadata:
+  name: logging-elasticsearch-template
+  annotations:
+    description: "Template for deploying ElasticSearch with proxy/plugin for storing and retrieving aggregated cluster logs."
+    tags: "infrastructure"
+labels:
+  logging-infra: elasticsearch
+  provider: openshift
+  component: elasticsearch
+objects:
+-
+  apiVersion: "v1"
+  kind: "DeploymentConfig"
+  metadata:
+    name: ${ES_DEPLOYMENT_NAME}
+  spec:
+    replicas: 1
+    selector:
+      provider: "openshift"
+      component: "elasticsearch"
+      deployment: ${ES_DEPLOYMENT_NAME}
+    triggers:
+    - type: ConfigChange
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          provider: "openshift"
+          component: "elasticsearch"
+          deployment: ${ES_DEPLOYMENT_NAME}
+      spec:
+        serviceAccountName: aggregated-logging
+        containers:
+          -
+            name: "elasticsearch"
+            openshiftImage: "sosiouxme/openshift-elasticsearch:v0.2.0"
+            workingimage: "fabric8/elasticsearch-k8s:1.5.2"
+            image: ${IMAGE_PREFIX}logging-elasticsearch:${IMAGE_VERSION}
+            imagePullPolicy: Always
+            ports:
+            -
+              containerPort: 9300
+              name: "cluster"
+            env:
+            -
+              name: "KUBERNETES_TRUST_CERT"
+              value: "true"
+            -
+              name: "SERVICE_DNS"
+              value: "logging-es-cluster"
+            -
+              name: "CLUSTER_NAME"
+              value: "logging-elasticsearch"
+            volumeMounts:
+              - name: elasticsearch
+                mountPath: /etc/elasticsearch/keys
+                readOnly: true
+          -
+            name: "es-proxy-mutualtls"
+            workingimage: "sosiouxme/openshift-auth-proxy:v0.1.8"
+            image: ${IMAGE_PREFIX}openshift-auth-proxy:${IMAGE_VERSION}
+            imagePullPolicy: Always
+            ports:
+              -
+                name: "mutualtls"
+                containerPort: 3001
+            env:
+              -
+                name: "OAP_SERVER_PORT"
+                value: "3001"
+              -
+                name: "OAP_BACKEND_URL"
+                value: "http://localhost:9200"
+              -
+                name: "OAP_AUTH_MODE"
+                value: "mutual_tls"
+              -
+                name: "OAP_TRANSFORM"
+                value: "user_header,kibana_es"
+              -
+                name: "OAP_TRUST_REMOTE_USER"
+                value: "true"
+              -
+                name: "OAP_MASTER_URL"
+                value: ${OAP_MASTER_URL}
+              -
+                name: "OAP_MASTER_CA_FILE"
+                value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              -
+                name: "OAP_DEBUG"
+                value: ${OAP_DEBUG}
+            volumeMounts:
+              - name: es-proxy
+                mountPath: /secret
+                readOnly: true
+          -
+            name: "es-proxy"
+            workingimage: "sosiouxme/openshift-auth-proxy:v0.1.8"
+            image: ${IMAGE_PREFIX}openshift-auth-proxy:${IMAGE_VERSION}
+            imagePullPolicy: Always
+            ports:
+              -
+                name: "tokenauth"
+                containerPort: 3000
+            env:
+              -
+                name: "OAP_BACKEND_URL"
+                value: "http://localhost:9200"
+              -
+                name: "OAP_AUTH_MODE"
+                value: "bearer"
+              -
+                name: "OAP_TRANSFORM"
+                value: "user_header"
+              -
+                name: "OAP_MASTER_URL"
+                value: ${OAP_MASTER_URL}
+              -
+                name: "OAP_MASTER_CA_FILE"
+                value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              -
+                name: "OAP_DEBUG"
+                value: ${OAP_DEBUG}
+            volumeMounts:
+              - name: es-proxy
+                mountPath: /secret
+                readOnly: true
+        volumes:
+          - name: elasticsearch
+            secret:
+              secretName: logging-elasticsearch
+          - name: es-proxy
+            secret:
+              secretName: logging-es-proxy
+parameters:
+-
+  description: 'Specify prefix for logging components; e.g. for "openshift/origin-logging-deployer:v1.1", set prefix "openshift/origin-"'
+  name: IMAGE_PREFIX
+  value: "docker.io/openshift/origin-"
+-
+  description: 'Specify version for logging components; e.g. for "openshift/origin-logging-deployer:v1.1", set version "v1.1"'
+  name: IMAGE_VERSION
+  value: "latest"
+-
+  description: 'Use to create multiple deployments in order to "scale"; will share services but must have different names.'
+  name: ES_DEPLOYMENT_NAME
+  value: "logging-elasticsearch"
+-
+  description: "Internal URL for the master, for authentication retrieval"
+  name: OAP_MASTER_URL
+  value: "https://kubernetes.default.svc.cluster.local"
+-
+  description: "Show extra proxy debug information at startup and during operations"
+  name: OAP_DEBUG
+  value: "false"
