@@ -3,12 +3,16 @@
 mkdir -p /elasticsearch/$CLUSTER_NAME
 ln -s /etc/elasticsearch/keys/searchguard.key /elasticsearch/$CLUSTER_NAME/searchguard_node_key.key
 
+# do an initial run to initialize the SearchGuard ACL
 sed --in-place=.bak 's/searchguard.ssl.transport.http.enabled: true/searchguard.ssl.transport.http.enabled: false/' /usr/share/elasticsearch/config/elasticsearch.yml
 sed -i 's/allow_all_from_loopback: false/allow_all_from_loopback: true/' /usr/share/elasticsearch/config/elasticsearch.yml
 echo "" >> /usr/share/elasticsearch/config/elasticsearch.yml
 echo "network.host: 127.0.0.1" >> /usr/share/elasticsearch/config/elasticsearch.yml
 
 nohup /usr/share/elasticsearch/bin/elasticsearch -Des.pidfile=./elasticsearch.pid &
+until $(curl -s -f -o /dev/null --connect-timeout 1 -m 1 --head http://localhost:9200); do
+    sleep 0.1;
+done
 
 # check to see if ES has started up yet
 until $(curl -s -f -o /dev/null --connect-timeout 1 -m 1 --head http://localhost:9200); do
@@ -31,14 +35,14 @@ if [ -z $(curl -s -f 'http://localhost:9200/searchguard/ac/ac') ]; then
       },
       {
         "__Comment__": "This is so that Kibana can do anything in the .kibana index",
-        "users": ["kibana"],
+        "users": ["kibana", "luke", "jeff", "eric", "jimmi"],
         "indices": [".kibana"],
         "filters_bypass": ["*"],
         "filters_execute": []
       },
       {
         "__Comment__": "This is so that Kibana can only read in all indices",
-        "users": ["kibana"],
+        "users": ["kibana", "luke", "jeff", "eric", "jimmi"],
         "filters_bypass": [],
         "filters_execute": ["actionrequestfilter.kibana"]
       }
@@ -51,5 +55,8 @@ if [ -z $(curl -s -f 'http://localhost:9200/searchguard/ac/ac') ]; then
 fi
 
 kill `cat ./elasticsearch.pid`
+# put the settings back the way they were
 mv /usr/share/elasticsearch/config/elasticsearch.yml.bak /usr/share/elasticsearch/config/elasticsearch.yml
+
+# now run the real thing
 /usr/share/elasticsearch/bin/elasticsearch
