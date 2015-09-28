@@ -35,6 +35,10 @@ objects:
           value: ${IMAGE_PREFIX}
         - name: IMAGE_VERSION
           value: ${IMAGE_VERSION}
+        - name: ENABLE_OPS_CLUSTER
+          value: ${ENABLE_OPS_CLUSTER}
+        - name: ES_VOLUME_CAPACITY
+          value: ${ES_VOLUME_CAPACITY}
         - name: KIBANA_HOSTNAME
           value: ${KIBANA_HOSTNAME}
         - name: PUBLIC_MASTER_URL
@@ -59,6 +63,14 @@ parameters:
   description: 'Specify version for logging components; e.g. for "openshift/origin-logging-deployer:v1.1", set version "v1.1"'
   name: IMAGE_VERSION
   value: "latest"
+-
+  description: "If true, set up to use a second ES cluster for ops logs."
+  name: ENABLE_OPS_CLUSTER
+  value: "false"
+-
+  description: 'Gigabytes of persistent storage required per ElasticSearch instance'
+  name: ES_VOLUME_CAPACITY
+  required: true
 -
   description: "External hostname where clients will reach kibana"
   name: KIBANA_HOSTNAME

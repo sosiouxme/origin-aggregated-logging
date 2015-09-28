@@ -1,17 +1,19 @@
 # Logging Deployer
 
-The deployer pod can deploy the full stack of the aggregated logging solution
-with just a few prerequisites:
+The deployer pod can enable deploying the full stack of the aggregated
+logging solution with just a few prerequisites:
 
-1. A "logging-deployer" Secret 
-2. A "logging-deployer" ServiceAccount with the secret and cluster-admin privileges
+1. A "logging-deployer" Secret
+2. A "logging-deployer" ServiceAccount with the secret and create privileges
 3. Optionally, a key and certificate for the Kibana server to be deployed.
-4. (TODO) Sufficient PhysicalVolumes defined for ElasticSearch cluster storage.
+4. Sufficient PersistentVolumes defined for ElasticSearch cluster storage.
 
-The deployer generates all the necessary certs/keys/etc for cluster communication 
-and defines all of the necessary API objects to implement aggregated logging. It
-must be run with cluster-admin privileges in order to create an OAuth client and
-modify the privileged SCC so fluentd can run as a privileged pod on every node.
+The deployer generates all the necessary certs/keys/etc for cluster
+communication and defines secrets and templates for all of the necessary
+API objects to implement aggregated logging. There are a number of
+manual steps you must run with cluster-admin privileges in order to
+create an OAuth client and modify the privileged SCC so fluentd can run
+as a privileged pod on every node.
 
 ## Choose a Project
 
@@ -60,7 +62,7 @@ The deployer must run under a special service account defined as follows:
     - name: logging-deployer
     API
 
-    openshift admin policy add-cluster-role-to-user cluster-admin \
+    openshift admin policy add-role-to-user edit \
               system:serviceaccount:logging:logging-deployer
 
 Note you should replace ":logging:" with the project name.
@@ -75,6 +77,8 @@ authenticating to OpenShift. With example parameters:
                -v KIBANA_HOSTNAME=kibana.example.com,PUBLIC_MASTER_URL=https://localhost:8443 \
                | oc create -f -
 
+Check the logs of the resulting pod for further instructions on deploying the result.
+
 ## Cleanup and removal
 
 After deployment, the deployer account and secret can be removed.
@@ -84,11 +88,10 @@ After deployment, the deployer account and secret can be removed.
 When the deployer runs, it deletes any existing logging objects
 to make way for defining new ones. You can also do this manually:
 
-    oc delete template logging-kibana-template logging-fluentd-template \
-                logging-elasticsearch-template logging-support-template
+    oc delete template --selector logging-infra=support
     oc delete all --selector logging-infra=kibana
     oc delete all --selector logging-infra=fluentd
-    oc delete all --selector logging-infra=elasticsearch
+    oc delete all,pvc --selector logging-infra=elasticsearch
     oc delete all,sa,oauthclient --selector logging-infra=support
     oc delete secret logging-fluentd logging-elasticsearch logging-es-proxy logging-kibana logging-kibana-proxy
 
@@ -101,5 +104,8 @@ Check the script header for optional environment variables that can be supplied.
 Define PROJECT to control where everything is created (`default` if not specified);
 all others can be left to defaults just for a trial run.
 
-    PROJECT=logging ./run.sh
+    PUBLIC_MASTER_URL=https://master.example.com:8443 PROJECT=logging ./run.sh
+
+There are some other useful templates for development, including builds
+for these components an host-based PVs.
 
