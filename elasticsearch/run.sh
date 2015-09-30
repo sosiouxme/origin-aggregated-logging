@@ -31,14 +31,14 @@ if [ -z $(curl -s -f 'http://localhost:9200/searchguard/ac/ac') ]; then
       },
       {
         "__Comment__": "This is so that Kibana can do anything in the .kibana index",
-        "users": ["kibana"],
+        "users": ["kibana", "*"],
         "indices": [".kibana_*"],
         "filters_bypass": ["*"],
         "filters_execute": []
       },
       {
         "__Comment__": "This is so that Kibana can only read in all indices",
-        "users": ["kibana"],
+        "users": ["kibana", "*"],
         "filters_bypass": [],
         "filters_execute": ["actionrequestfilter.kibana"]
       }
