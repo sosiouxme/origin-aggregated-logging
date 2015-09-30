@@ -97,6 +97,8 @@ objects:
                 - name: elasticsearch
                   mountPath: /etc/elasticsearch/keys
                   readOnly: true
+                - name: elasticsearch-storage
+                  mountPath: /elasticsearch/persistent
             -
               name: "es-proxy-mutualtls"
               image: openshift-auth-proxy
