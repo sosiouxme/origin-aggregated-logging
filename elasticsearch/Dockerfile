@@ -26,6 +26,7 @@ RUN rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch && \
   mkdir -p /usr/share/elasticsearch/config && \
   cp /etc/elasticsearch/* /usr/share/elasticsearch/config && \
   /usr/share/elasticsearch/bin/plugin -i io.fabric8/elasticsearch-cloud-kubernetes/1.2.1 && \
+  /usr/share/elasticsearch/bin/plugin -i io.fabric8.elasticsearch/openshift-elasticsearch-plugin/0.1 && \
   /usr/share/elasticsearch/bin/plugin -i com.floragunn/search-guard/0.5 && \
   chmod -R og+w /usr/share/elasticsearch && \
   chmod -R og+w ${HOME} && \
