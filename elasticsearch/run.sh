@@ -1,15 +1,15 @@
 #! /bin/bash
 
 # do an initial run to configure the SearchGuard ACL
+mkdir -p /elasticsearch/$CLUSTER_NAME
+ln -s /etc/elasticsearch/keys/searchguard.key /elasticsearch/$CLUSTER_NAME/searchguard_node_key.key
+
 sed --in-place=.bak 's/searchguard.ssl.transport.http.enabled: true/searchguard.ssl.transport.http.enabled: false/' /usr/share/elasticsearch/config/elasticsearch.yml
-sed -i 's/searchguard.allow_all_from_loopback: false/searchguard.allow_all_from_loopback: true/' /usr/share/elasticsearch/config/elasticsearch.yml
+sed -i 's/allow_all_from_loopback: false/allow_all_from_loopback: true/' /usr/share/elasticsearch/config/elasticsearch.yml
+echo "" >> /usr/share/elasticsearch/config/elasticsearch.yml
 echo "network.host: 127.0.0.1" >> /usr/share/elasticsearch/config/elasticsearch.yml
 
 nohup /usr/share/elasticsearch/bin/elasticsearch -Des.pidfile=./elasticsearch.pid &
-until $(curl -s -f -o /dev/null --connect-timeout 1 -m 1 --head http://localhost:9200); do
-    sleep 0.1;
-done
-
 # check to see if ES has started up yet
 until $(curl -s -f -o /dev/null --connect-timeout 1 -m 1 --head http://localhost:9200); do
   sleep 0.1;
