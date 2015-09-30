@@ -97,6 +97,8 @@ CONF
 
 	# generate java store/trust for the SearchGuard plugin
 	sh scripts/generateJKSChain.sh es-logging-cluster
+	# generate common node key for the SearchGuard plugin
+	openssl rand 16 | openssl enc -aes-128-cbc -nosalt -out $dir/searchguard_node_key.key -pass pass:pass
 
 	# generate proxy session
 	cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 200 | head -n 1 > "$dir/session-secret"
@@ -109,7 +111,8 @@ CONF
 
 	echo "Creating secrets"
 	oc secrets new logging-elasticsearch \
-	    key=$dir/keystore.jks truststore=$dir/truststore.jks
+	    key=$dir/keystore.jks truststore=$dir/truststore.jks \
+	    searchguard.key=$dir/searchguard_node_key.key
 	oc secrets new logging-es-proxy \
 	    server-key=$dir/es-proxy.key server-cert=$dir/es-proxy.crt \
 	    server-tls.json=$dir/server-tls.json mutual-ca=$dir/ca.crt
