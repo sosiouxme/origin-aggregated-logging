@@ -29,16 +29,14 @@ searchguard:
   allow_all_from_loopback: false
   authentication:
     authentication_backend:
-      impl: com.floragunn.searchguard.authentication.backend.simple.SettingsBasedAuthenticationBackend
+      impl: com.floragunn.searchguard.authentication.backend.simple.AlwaysSucceedAuthenticationBackend
     authorizer:
       impl: com.floragunn.searchguard.authorization.simple.SettingsBasedAuthorizator
     http_authenticator:
-      impl: com.floragunn.searchguard.authentication.http.basic.HTTPBasicAuthenticator
-    settingsdb:
-      user:
-        admin: secret
-        fluentd: changeme
-        kibana: changeme
+      impl: com.floragunn.searchguard.authentication.http.proxy.HTTPProxyAuthenticator
+    proxy:
+      header: X-Proxy-Remote-User
+      trusted_ips: 127.0.0.1
     authorization:
       settingsdb:
         roles:
