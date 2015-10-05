@@ -6,7 +6,7 @@ logging solution with just a few prerequisites:
 1. A "logging-deployer" Secret
 2. A "logging-deployer" ServiceAccount with the secret and create privileges
 3. Optionally, a key and certificate for the Kibana server to be deployed.
-4. Sufficient PersistentVolumes defined for ElasticSearch cluster storage.
+4. Sufficient volumes defined for ElasticSearch cluster storage.
 
 The deployer generates all the necessary certs/keys/etc for cluster
 communication and defines secrets and templates for all of the necessary
@@ -22,14 +22,18 @@ For this document we will assume the `logging` project.
 
     oc new-project logging
 
-You can use the default project if you want. When deploying fluentd as a static
-pod, this was necessary as that was the namespace given to mirror pods. This
-deployment has no need to run in the default project.
+You can use the default project if you want, but this implementation
+has no need to run in the default project.
 
-## Create the Secret
+If we are forced to deploy fluentd as a static pod, the corresponding
+mirror pods will show up in the default project.  They will need to be
+configured with the full DNS name of the ElasticSearch service in order
+to enter data.
+
+## Create the Deployer Secret
 
 All contents of the secret are optional, but the secret itself must always be
-created in order to deploy. For an empty secret:
+created in order to run the deployer. For an empty secret:
 
     oc secrets new logging-deployer nothing=/dev/null
 
@@ -37,6 +41,8 @@ The following files may be supplied in the deployer secret:
 
 * `kibana.crt` - A browser-facing certificate for the Kibana server.
 * `kibana.key` - A key to be used with the Kibana certificate.
+* `kibana-ops.crt` - A browser-facing certificate for the Ops Kibana server.
+* `kibana-ops.key` - A key to be used with the Ops Kibana certificate.
 * `server-tls.json` - JSON TLS options to override the Kibana server defaults; refer to
   [NodeJS docs](https://nodejs.org/api/tls.html#tls_tls_connect_options_callback) for
   available options and the [default options](conf/server-tls.json) for an example.
@@ -49,7 +55,7 @@ An invocation supplying a properly signed Kibana cert might be:
     oc secrets new logging-deployer \
        kibana.crt=/path/to/cert kibana.key=/path/to/key
 
-## Create the ServiceAccount
+## Create the Deployer ServiceAccount
 
 The deployer must run under a special service account defined as follows:
 
@@ -62,22 +68,177 @@ The deployer must run under a special service account defined as follows:
     - name: logging-deployer
     API
 
-    openshift admin policy add-role-to-user edit \
+    openshift policy add-role-to-user edit \
               system:serviceaccount:logging:logging-deployer
 
-Note you should replace ":logging:" with the project name.
+Note that you should replace ":logging:" with the project name.
 
 ## Run the Deployer
 
 You will need to specify the hostname at which Kibana should be exposed to client
 browsers, and also the master URL where client browsers will be directed for
-authenticating to OpenShift. With example parameters:
+authenticating to OpenShift.
+
+* `KIBANA_HOSTNAME` (required): External hostname where web clients will reach Kibana
+* `PUBLIC_MASTER_URL` (required): External URL for the master, for OAuth purposes
+* `IMAGE_PREFIX`: Specify prefix for logging component images; e.g. for "openshift/origin-logging-deployer:v1.1", set prefix "openshift/origin-"
+* `IMAGE_VERSION`: Specify version for logging component images; e.g. for "openshift/origin-logging-deployer:v1.1", set version "v1.1"
+* `ENABLE_OPS_CLUSTER`: If "true", set up to use a second ES cluster and Kibana for ops logs.
+
+With example parameters:
 
     oc process logging-deployer-template \
                -v KIBANA_HOSTNAME=kibana.example.com,PUBLIC_MASTER_URL=https://localhost:8443 \
                | oc create -f -
 
 Check the logs of the resulting pod for further instructions on deploying the result.
+They are described below.
+
+## Deploy the templates created by the deployer
+
+### Supporting definitions
+
+Create the supporting definitions (you must be cluster admin):
+
+    oc process logging-support-template | oc create -f -
+
+Enable fluentd service account - edit SCC with the following
+
+    oc edit scc/privileged
+
+Add one line as the user at the end: (note, change `:logging:` below to the project of your choice)
+
+    - system:serviceaccount:logging:aggregated-logging-fluentd
+
+Give the account access to read labels from all pods:
+
+    openshift admin policy add-cluster-role-to-user cluster-reader system:serviceaccount:logging:aggregated-logging-fluentd
+
+
+### ElasticSearch
+
+Each instance of ElasticSearch requires specifying a volume for persistent
+storage. For an ephemeral deployment, you can deploy without persistent
+storage and all data will be lost any time a pod is restarted.
+
+    oc process logging-es-template | oc create -f -
+
+This creates a deployment of ElasticSearch for a single instance, with a
+unique name. Unless using ephemeral storage, this should not be scaled up
+because each instance requires its own storage, and there isn't a way to
+specify multiple volumes to be paired with multiple instances.
+
+Instead, to scale you can just create multiple deployments. You should
+create at least three for redundancy, and can create more for scaling.
+
+For production use it is best to deploy with the correct definition from
+the start. This will require amendments to your deployment described
+below. The examples below assume you have saved a deployment to the
+`es-1.yaml` file:
+
+    oc process logging-es-template -o yaml > es-1.yaml
+
+Once your deployment definition is suitable, you can invoke it with:
+
+    oc create -f es-1.yaml
+
+#### Node selector
+
+ElasticSearch can be very resource-heavy, particularly in RAM, depending
+on the volume of logs your cluster generates.  Per Elastic's guidance,
+all members of the cluster should have low latency network connections
+to each other. You will likely want to direct the instances to dedicated
+nodes, or a dedicated region in your cluster. You can do this by supplying
+a node selector in each deployment.
+
+There is no helpful command for adding a node selector. You will need to
+hand-edit your deployment and add the `nodeSelector` element to specify
+the label corresponding to your desired nodes, e.g.:
+
+    apiVersion: v1
+    kind: DeploymentConfig
+    spec:
+      nodeSelector:
+        nodelabel: logging-infra-1
+
+Recall that the default scheduler algorithm will spread pods to different
+nodes (in the same region, if regions are defined). However this can
+have unexpected consequences in several scenarios and you will most
+likely want to label and specify specific nodes for ElasticSearch.
+
+#### Storage
+
+To attach persistent storage, you can process the definition through
+`oc volume` prior to creating it. For example, to use a local directory
+on the host (advisable in order to take advantage of fast local disk):
+
+    oc volume -f es-1.yaml --overwrite --name=elasticsearch-storage \
+              --type=hostPath --path=/path/to/storage \
+              -o yaml > es-1-vol.yaml
+
+See `oc volume -h` for further options. E.g. if you have an NFS volume
+you would like to use, you can set it with:
+
+    oc volume -f es-1.yaml --overwrite --name=elasticsearch-storage \
+              --source='{"nfs": {"server": "nfs.server.example.com", "path": "/exported/path"}}' \
+              -o yaml > es-1-vol.yaml
+
+#### Settings
+
+There are some administrative settings that can be supplied (ref. [Elastic documentation](https://www.elastic.co/guide/en/elasticsearch/guide/current/_important_configuration_changes.html)).
+
+* `minimum_master_nodes` - the quorum required to elect a new master. Should be more than half the intended cluster size.
+* `recover_after_nodes` - when restarting the cluster, require this many nodes to be present before starting recovery.
+* `expected_nodes` and `recover_after_time` - when restarting the cluster, wait for number of nodes to be present or time to expire before starting recovery.
+
+### Fluentd
+
+Once you have ElasticSearch running as desired, deploy fluentd on every
+node to feed logs into it.
+
+    oc process logging-fluentd-template | oc create -f -
+
+You may scale the resulting deployment normally to the number of nodes:
+
+    oc scale dc/logging-fluentd --replicas=3
+    oc scale rc/logging-fluentd-1 --replicas=3
+
+This implementation is not intended for production as it does not
+dynamically grow and shrink with the number of nodes, and uses a fake
+port reservation to prevent multiple replicas on one node. One of two
+methods is intended for production:
+
+1. Use the experimental DaemonController (once available) to schedule
+   the pod with a NodeSet including every node.
+2. Extract the pod definition from the template output, copy it to every
+   node, and ensure every node uses it as a static pod.
+
+### Kibana
+
+Finally, deploy the user interface, Kibana.
+
+    oc process logging-kibana-template | oc create -f -
+
+You may scale the resulting deployment normally for redundancy:
+
+    oc scale dc/logging-kibana --replicas=2
+    oc scale rc/logging-kibana-1 --replicas=2
+
+Once this is running, you should be able to visit the `KIBANA_HOSTNAME`
+specified above to visit the UI (assuming DNS points correctly for
+this domain).
+
+### Ops cluster
+
+If you set `ENABLE_OPS_CLUSTER` to `true` for the deployer, fluentd
+expects to split logs between the main ElasticSearch cluster and another
+cluster reserved for operations logs (node logs and `default` project).
+Thus you need to deploy a separate ElasticSearch cluster and a separate
+Kibana to access it.
+
+The same instructions that referred to `logging-elasticsearch-template`
+and `logging-kibana-template` should be repeated for
+`logging-elasticsearch-ops-template` and `logging-kibana-ops-template`
 
 ## Cleanup and removal
 
@@ -85,27 +246,11 @@ After deployment, the deployer account and secret can be removed.
 
     oc delete sa/logging-deployer secret/logging-deployer
 
-When the deployer runs, it deletes any existing logging objects
-to make way for defining new ones. You can also do this manually:
+If you wish to remove everything generated or instantiated without having
+to destroy the project:
 
-    oc delete template --selector logging-infra=support
     oc delete all --selector logging-infra=kibana
     oc delete all --selector logging-infra=fluentd
-    oc delete all,pvc --selector logging-infra=elasticsearch
+    oc delete all --selector logging-infra=elasticsearch
     oc delete all,sa,oauthclient --selector logging-infra=support
     oc delete secret logging-fluentd logging-elasticsearch logging-es-proxy logging-kibana logging-kibana-proxy
-
-## Development
-
-The deployer `run.sh` can run outside a container. In that case it will use
-your current kubeconfig context (which must be a cluster admin) to create everything.
-You will need the Java JDK, openssl, and of course the openshift/oc client.
-Check the script header for optional environment variables that can be supplied.
-Define PROJECT to control where everything is created (`default` if not specified);
-all others can be left to defaults just for a trial run.
-
-    PUBLIC_MASTER_URL=https://master.example.com:8443 PROJECT=logging ./run.sh
-
-There are some other useful templates for development, including builds
-for these components an host-based PVs.
-
