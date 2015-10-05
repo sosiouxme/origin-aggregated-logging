@@ -1,0 +1,32 @@
+#!/bin/bash 
+
+set -ex
+
+yum install -y -- setopt=tsflags=nodocs \
+    java-1.8.0-openjdk \
+    elasticsearch \
+    search-guard \
+    zip
+
+# reconcile upstream and RPM locations
+ln -s /usr/share/java/elasticsearch /usr/share/elasticsearch
+
+es_home=/usr/share/elasticsearch
+alias plugin="java -Xmx64m -Xms16m -Delasticsearch -Des.path.home=\"$es_home\" -classpath \"$es_home/lib/*:/usr/share/java/lucene-core-4.10.4.redhat-1.jar\" org.elasticsearch.plugins.PluginManager"
+mkdir -p ${HOME}
+mkdir /elasticsearch
+chmod -R og+w /usr/share/java/elasticsearch ${HOME} /elasticsearch
+
+# install the plugins we need
+pushd /usr/share/java/search-guard
+  # SG packaging should probably just be the .zip that's expected by plugin
+  zip -r /tmp/search-guard.zip /usr/share/java/search-guard
+  plugin -i search-guard -u file:///tmp/search-guard.zip
+  rm -f /tmp/search-guard.zip
+popd
+plugin -i io.fabric8/elasticsearch-cloud-kubernetes/1.2.1
+plugin -i io.fabric8.elasticsearch/openshift-elasticsearch-plugin/0.1
+
+# don't clutter up the image with stuff we don't need at runtime
+yum remove -y search-guard zip
+yum clean all
