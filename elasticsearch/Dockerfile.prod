@@ -18,12 +18,6 @@ LABEL io.k8s.description="Elasticsearch container for allowing indexing and sear
   io.openshift.tags="logging,elk,elasticsearch"
 
 ADD elasticsearch.repo.prod /etc/yum.repos.d/elasticsearch.repo
-
-RUN yum install -y -- setopt=tsflags=nodocs \
-    java-1.8.0-openjdk \
-    elasticsearch \
-    search-guard \
-    zip
 ADD run.sh install.sh.prod ${HOME}/
 ADD *.yml /etc/elasticsearch/
 RUN ${HOME}/install.sh.prod

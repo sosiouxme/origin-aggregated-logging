@@ -36,7 +36,7 @@ if [ -z $(curl -s -f 'http://localhost:9200/searchguard/ac/ac') ]; then
       {
         "__Comment__": "This is so that Kibana can do anything in the .kibana index",
         "users": ["kibana", "luke", "jeff", "eric", "jimmi"],
-        "indices": [".kibana*", ],
+        "indices": [".kibana*"],
         "filters_bypass": ["*"],
         "filters_execute": []
       },
