@@ -1,6 +1,6 @@
 searchguard.ssl.transport.http.enabled: true
 
- cluster:
+cluster:
   name: ${CLUSTER_NAME}
 
 script:
