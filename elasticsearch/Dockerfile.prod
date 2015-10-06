@@ -1,4 +1,5 @@
-FROM rhel:rhel7
+#FROM rhel:rhel7
+FROM centos:centos7
 
 MAINTAINER Luke Meyer <lmeyer@redhat.com>
 
@@ -8,7 +9,8 @@ EXPOSE 9300
 ENV HOME=/opt/app-root/src \
   PATH=/opt/app-root/src/bin:/opt/app-root/bin:$PATH \
   JAVA_VER=1.8.0 \
-  ES_VER=1.5.2
+  ES_VER=1.5.2 \
+  ES_CONF=/etc/elasticsearch/elasticsearch.yml
 
 LABEL io.k8s.description="Elasticsearch container for allowing indexing and searching of aggregated logs" \
   io.k8s.display-name="Elasticsearch 1.5.2" \
@@ -16,10 +18,16 @@ LABEL io.k8s.description="Elasticsearch container for allowing indexing and sear
   io.openshift.tags="logging,elk,elasticsearch"
 
 ADD elasticsearch.repo.prod /etc/yum.repos.d/elasticsearch.repo
-ADD run.sh ${HOME}
-ADD *.yml /etc/elasticsearch
-RUN ./install.sh.prod
+
+RUN yum install -y -- setopt=tsflags=nodocs \
+    java-1.8.0-openjdk \
+    elasticsearch \
+    search-guard \
+    zip
+ADD run.sh install.sh.prod ${HOME}/
+ADD *.yml /etc/elasticsearch/
+RUN ${HOME}/install.sh.prod
 
 WORKDIR ${HOME}
-
+USER 1000
 CMD ["sh", "/opt/app-root/src/run.sh"]
