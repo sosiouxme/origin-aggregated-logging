@@ -52,17 +52,26 @@ echo "Import back to keystore (including CA chain)"
 "$JAVA_HOME/bin/keytool"  \
     -import \
     -file $dir/ca.crt  \
-    -keystore $dir/truststore.jks   \
-    -storepass $ts_pass  \
+    -keystore $dir/keystore.jks   \
+    -storepass $ks_pass  \
     -noprompt -alias sig-ca
 
 "$JAVA_HOME/bin/keytool" \
     -import \
     -file $dir/$NODE_NAME.crt \
-    -keystore $dir/truststore.jks \
-    -storepass $ts_pass \
+    -keystore $dir/keystore.jks \
+    -storepass $ks_pass \
     -noprompt \
     -alias $NODE_NAME
+
+echo "Import CA to truststore for validating client certs"
+
+"$JAVA_HOME/bin/keytool"  \
+    -import \
+    -file $dir/ca.crt  \
+    -keystore $dir/truststore.jks   \
+    -storepass $ts_pass  \
+    -noprompt -alias sig-ca
 
 echo All done for $NODE_NAME
 

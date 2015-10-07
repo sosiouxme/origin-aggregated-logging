@@ -36,7 +36,7 @@ searchguard:
       impl: com.floragunn.searchguard.authentication.http.proxy.HTTPProxyAuthenticator
     proxy:
       header: X-Proxy-Remote-User
-      trusted_ips: 127.0.0.1
+      trusted_ips: *
     authorization:
       settingsdb:
         roles:

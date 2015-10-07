@@ -6,9 +6,9 @@ metadata:
     description: "Template for creating local builds of logging components from source."
     tags: "infrastructure"
 labels:
-  logging-infra: elasticsearch
+  logging-infra: development
   provider: openshift
-  component: elasticsearch
+  component: development
 objects:
 - apiVersion: v1
   kind: ImageStream

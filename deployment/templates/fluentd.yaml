@@ -122,11 +122,11 @@ parameters:
 -
   description: "Hostname (or IP) for reaching ElasticSearch to write logs"
   name: ES_HOST
-  value: "logging-es-mutualtls"
+  value: "logging-es"
 -
   description: "Port number for reaching ElasticSearch to write logs"
   name: ES_PORT
-  value: "9201"
+  value: "9200"
 -
   description: "Location of client certificate for authenticating to ElasticSearch to write logs"
   name: ES_CLIENT_CERT
@@ -142,11 +142,11 @@ parameters:
 -
   description: "Hostname (or IP) for reaching ElasticSearch to write cluster logs"
   name: OPS_HOST
-  value: "logging-es-mutualtls"
+  value: "logging-es"
 -
   description: "Port number for reaching ElasticSearch to write cluster logs"
   name: OPS_PORT
-  value: "9201"
+  value: "9200"
 -
   description: "Location of client certificate for authenticating to ElasticSearch to write cluster logs"
   name: OPS_CLIENT_CERT

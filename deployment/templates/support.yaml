@@ -35,7 +35,6 @@ objects:
       name: aggregated-logging
     secrets:
       - name: logging-elasticsearch
-      - name: logging-es-proxy
       - name: logging-kibana
       - name: logging-kibana-proxy
   -
@@ -49,12 +48,12 @@ objects:
     apiVersion: "v1"
     kind: "Service"
     metadata:
-      name: "logging-es-mutualtls"
+      name: "logging-es"
     spec:
       ports:
       -
-        port: 9201
-        targetPort: mutualtls
+        port: 9200
+        targetPort: restapi
       selector:
         provider: "openshift"
         component: "es"
@@ -76,12 +75,12 @@ objects:
     apiVersion: "v1"
     kind: "Service"
     metadata:
-      name: "logging-es-ops-mutualtls"
+      name: "logging-es-ops"
     spec:
       ports:
       -
-        port: 9201
-        targetPort: mutualtls
+        port: 9200
+        targetPort: restapi
       selector:
         provider: "openshift"
         component: "es-ops"
