@@ -98,7 +98,7 @@ objects:
                   value: "oauth2"
                 -
                   name: "OAP_TRANSFORM"
-                  value: "user_header"
+                  value: "user_header,token_header"
                 -
                   name: "OAP_OAUTH_ID"
                   value: kibana-proxy
