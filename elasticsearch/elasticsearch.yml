@@ -33,10 +33,10 @@ searchguard:
     authorizer:
       impl: com.floragunn.searchguard.authorization.simple.SettingsBasedAuthorizator
     http_authenticator:
-      impl: com.floragunn.searchguard.authentication.http.proxy.HTTPProxyAuthenticator
+      impl: io.fabric8.elasticsearch.plugin.HTTPSProxyClientCertAuthenticator
     proxy:
       header: X-Proxy-Remote-User
-      trusted_ips: "*"
+      trusted_ips: ["*"]
     authorization:
       settingsdb:
         roles:
