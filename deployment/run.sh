@@ -48,15 +48,6 @@ if [ "${KEEP_SUPPORT}" != true ]; then
 	      --name="logging-signer-$$"
 	fi
 
-	# generate ES proxy certs
-	function join { local IFS="$1"; shift; echo "$*"; }
-	openshift admin ca create-server-cert  \
-	      --key=$dir/es-proxy.key \
-	      --cert=$dir/es-proxy.crt \
-	      --hostnames="$(join , logging-es{,-ops}-mutualtls{,.${project}.svc.cluster.local})" \
-	      --signer-cert="$dir/ca.crt" --signer-key="$dir/ca.key" --signer-serial="$dir/ca.serial.txt"
-#	      --hostnames="logging-es-mutualtls" \
-
 	# use or generate Kibana proxy certs
 	if [ -n "${KIBANA_KEY}" ]; then
 		echo "${KIBANA_KEY}" | base64 -d > $dir/kibana.key
@@ -95,8 +86,9 @@ CONF
 	sh scripts/generatePEMCert.sh fluentd
 	sh scripts/generatePEMCert.sh kibana
 
-	# generate java store/trust for the SearchGuard plugin
-	sh scripts/generateJKSChain.sh es-logging-cluster
+	# generate java store/trust for the ES SearchGuard plugin
+	function join { local IFS="$1"; shift; echo "$*"; }
+	sh scripts/generateJKSChain.sh logging-es "$(join , logging-es{,-ops}{,-cluster}{,.${project}.svc.cluster.local})"
 	# generate common node key for the SearchGuard plugin
 	openssl rand 16 | openssl enc -aes-128-cbc -nosalt -out $dir/searchguard_node_key.key -pass pass:pass
 
@@ -107,15 +99,12 @@ CONF
 
 	# (re)generate secrets
 	echo "Deleting existing secrets"
-	oc delete secret logging-fluentd logging-elasticsearch logging-es-proxy logging-kibana logging-kibana-proxy || :
+	oc delete secret logging-fluentd logging-elasticsearch logging-kibana logging-kibana-proxy || :
 
 	echo "Creating secrets"
 	oc secrets new logging-elasticsearch \
 	    key=$dir/keystore.jks truststore=$dir/truststore.jks \
 	    searchguard.key=$dir/searchguard_node_key.key
-	oc secrets new logging-es-proxy \
-	    server-key=$dir/es-proxy.key server-cert=$dir/es-proxy.crt \
-	    server-tls.json=$dir/server-tls.json mutual-ca=$dir/ca.crt
 	oc secrets new logging-kibana \
 	    ca=$dir/ca.crt \
 	    key=$dir/kibana.key cert=$dir/kibana.crt
@@ -139,11 +128,11 @@ oc delete template --selector logging-infra=elasticsearch
 oc delete template --selector logging-infra=elasticsearch-pv
 oc create -f templates/pv-nfs.yaml
 oc process -f templates/es.yaml -v "VOLUME_CAPACITY=${vol}" | oc create -f -
-es_host=logging-es-mutualtls.${project}.svc.cluster.local
+es_host=logging-es.${project}.svc.cluster.local
 es_ops_host=${es_host}
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
 	oc process -f templates/es.yaml -v "VOLUME_CAPACITY=${vol},ES_CLUSTER_NAME=es-ops" | oc create -f -
-	es_ops_host=logging-es-ops-mutualtls.${project}.svc.cluster.local
+	es_ops_host=logging-es-ops.${project}.svc.cluster.local
 fi
 oc process -f templates/fluentd.yaml -v "ES_HOST=${es_host},OPS_HOST=${es_ops_host}"| oc create -f -
 oc process -f templates/kibana.yaml -v "OAP_PUBLIC_MASTER_URL=${public_master_url}" | oc create -f -

@@ -137,11 +137,11 @@ parameters:
 -
   description: "Hostname/IP for ElasticSearch backend to connect to."
   name: ES_HOST
-  value: "logging-es-mutualtls"
+  value: "logging-es"
 -
   description: "Port to connect to for ElasticSearch backend."
   name: ES_PORT
-  value: "9201"
+  value: "9200"
 -
   description: "Show extra proxy debug information at startup and during operations"
   name: OAP_DEBUG
