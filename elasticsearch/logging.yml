@@ -6,6 +6,8 @@ logger:
   action: WARN
   # reduce the logging for aws, too much is logged under the default INFO
   com.amazonaws: WARN
+  io.fabric8.elasticsearch: DEBUG
+  io.fabric8.kubernetes: DEBUG
 
   # gateway
   #gateway: DEBUG
@@ -22,7 +24,7 @@ logger:
 
   # search-guard
   # Due to search-guard issue #33 this should be set to ERROR (too verbose at WARN)
-  com.floragunn.searchguard: ERROR
+  com.floragunn.searchguard: WARN
 
 additivity:
   index.search.slowlog: false
