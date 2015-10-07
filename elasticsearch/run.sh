@@ -59,4 +59,7 @@ kill `cat ./elasticsearch.pid`
 mv $ES_CONF{.bak,}
 
 # now run the real thing
+#export ES_JAVA_OPTS="-Xbootclasspath/a:/usr/share/java/elasticsearch/plugins/openshift-elasticsearch-plugin/jackson-*.jar"
+export ES_JAVA_OPTS="-Xbootclasspath/a:/usr/share/java/elasticsearch/plugins/search-guard/jackson-*.jar"
+
 /usr/share/elasticsearch/bin/elasticsearch
