@@ -1,6 +1,6 @@
 FROM centos:centos7
 
-MAINTAINER Eric Wolinetz <ewolinet@redhat.com>
+MAINTAINER OpenShift Development <dev@lists.openshift.redhat.com>
 
 EXPOSE 9200
 EXPOSE 9300

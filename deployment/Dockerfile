@@ -1,6 +1,6 @@
 FROM openshift/origin:latest
 
-MAINTAINER Luke Meyer <lmeyer@redhat.com>
+MAINTAINER OpenShift Development <dev@lists.openshift.redhat.com>
 
 ENV BIN_DIR=/opt/deploy \
     SCRATCH_DIR=/etc/deploy \
