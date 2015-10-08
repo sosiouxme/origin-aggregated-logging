@@ -64,7 +64,7 @@ kill `cat ./elasticsearch.pid`
 mv $ES_CONF{.bak,}
 
 # now run the real thing
-export ES_JAVA_OPTS="-Xbootclasspath/a:/usr/share/java/elasticsearch/plugins/openshift-elasticsearch-plugin/jackson-*.jar"
+export ES_JAVA_OPTS="-Xbootclasspath/p:/usr/share/java/elasticsearch/plugins/openshift-elasticsearch-plugin/jackson-*.jar"
 #export ES_JAVA_OPTS="-Xbootclasspath/a:/usr/share/java/elasticsearch/plugins/search-guard/jackson-*.jar"
 # the amount of RAM allocated should be half of available instance RAM.
 # ref. https://www.elastic.co/guide/en/elasticsearch/guide/current/heap-sizing.html#_give_half_your_memory_to_lucene
