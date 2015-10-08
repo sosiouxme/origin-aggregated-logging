@@ -55,6 +55,13 @@ objects:
             component: ${ES_CLUSTER_NAME}
             deployment: ${ES_DEPLOYMENT_NAME}
         spec:
+          limits:
+          -
+            type: Pod
+            max:
+              memory: "${INSTANCE_RAM}i"
+            min:
+              memory: "512Mi"
           serviceAccountName: aggregated-logging
           containers:
             -
@@ -78,6 +85,24 @@ objects:
               -
                 name: "CLUSTER_NAME"
                 value: "logging-${ES_CLUSTER_NAME}"
+              -
+                name: INSTANCE_RAM
+                value: ${INSTANCE_RAM}
+              -
+                name: CLUSTER_SIZE
+                value: ${CLUSTER_SIZE}
+              -
+                name: NODE_QUORUM
+                value: ${NODE_QUORUM}
+              -
+                name: RECOVER_AFTER_NODES
+                value: ${RECOVER_AFTER_NODES}
+              -
+                name: RECOVER_EXPECTED_NODES
+                value: ${RECOVER_EXPECTED_NODES}
+              -
+                name: RECOVER_AFTER_TIME
+                value: ${RECOVER_AFTER_TIME}
               volumeMounts:
                 - name: elasticsearch
                   mountPath: /etc/elasticsearch/keys
@@ -96,8 +121,32 @@ objects:
     name: ES_DEPLOYMENT_NAME
     from: 'logging-${ES_CLUSTER_NAME}-[a-z0-9]{8}'
     generate: expression
+  -
+    description: "Amount of RAM to reserve per ElasticSearch instance (e.g. 1024M or 8G)"
+    name: INSTANCE_RAM
+    value: ${ES_INSTANCE_RAM}
+  -
+    description: "Number of nodes required to elect a master (ES minimum_master_nodes). By default, derived from ES_CLUSTER_SIZE / 2 + 1."
+    name: NODE_QUORUM
+    value: ${ES_NODE_QUORUM}
+  -
+    description: "Number of nodes required to be present before the cluster will recover from a full restart. By default, one fewer than ES_CLUSTER_SIZE."
+    name: RECOVER_AFTER_NODES
+    value: ${ES_RECOVER_AFTER_NODES}
+  -
+    description: "Number of nodes desired to be present before the cluster will recover from a full restart. By default, ES_CLUSTER_SIZE."
+    name: RECOVER_EXPECTED_NODES
+    value: ${ES_RECOVER_EXPECTED_NODES}
+  -
+    description: "Timeout for *expected* nodes to be present when cluster is recovering from a full restart."
+    name: RECOVER_AFTER_TIME
+    value: ${ES_RECOVER_AFTER_TIME}
+
 parameters:
--
-  description: 'Vary to create templates for multiple clusters with different identities'
-  name: ES_CLUSTER_NAME
-  value: 'es'
+- name: ES_CLUSTER_NAME
+- name: ES_INSTANCE_RAM
+- name: ES_NODE_QUORUM
+- name: ES_RECOVER_AFTER_NODES
+- name: ES_RECOVER_EXPECTED_NODES
+- name: ES_RECOVER_AFTER_TIME
+

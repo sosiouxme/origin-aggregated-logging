@@ -37,14 +37,32 @@ objects:
           value: ${IMAGE_VERSION}
         - name: ENABLE_OPS_CLUSTER
           value: ${ENABLE_OPS_CLUSTER}
-        - name: ES_VOLUME_CAPACITY
-          value: ${ES_VOLUME_CAPACITY}
         - name: KIBANA_HOSTNAME
           value: ${KIBANA_HOSTNAME}
         - name: PUBLIC_MASTER_URL
           value: ${PUBLIC_MASTER_URL}
         - name: MASTER_URL
           value: ${MASTER_URL}
+        - name: ES_CLUSTER_SIZE
+          value: ${ES_CLUSTER_SIZE}
+        - name: ES_NODE_QUORUM
+          value: ${ES_NODE_QUORUM}
+        - name: ES_RECOVER_AFTER_NODES
+          value: ${ES_RECOVER_AFTER_NODES}
+        - name: ES_RECOVER_EXPECTED_NODES
+          value: ${ES_RECOVER_EXPECTED_NODES}
+        - name: ES_RECOVER_AFTER_TIME
+          value: ${ES_RECOVER_AFTER_TIME}
+        - name: ES_OPS_CLUSTER_SIZE
+          value: ${ES_OPS_CLUSTER_SIZE}
+        - name: ES_OPS_NODE_QUORUM
+          value: ${ES_OPS_NODE_QUORUM}
+        - name: ES_OPS_RECOVER_AFTER_NODES
+          value: ${ES_OPS_RECOVER_AFTER_NODES}
+        - name: ES_OPS_RECOVER_EXPECTED_NODES
+          value: ${ES_OPS_RECOVER_EXPECTED_NODES}
+        - name: ES_OPS_RECOVER_AFTER_TIME
+          value: ${ES_OPS_RECOVER_AFTER_TIME}
     dnsPolicy: ClusterFirst
     restartPolicy: Never
     serviceAccount: logging-deployer
@@ -68,10 +86,6 @@ parameters:
   name: ENABLE_OPS_CLUSTER
   value: "false"
 -
-  description: 'Gigabytes of persistent storage required per ElasticSearch instance'
-  name: ES_VOLUME_CAPACITY
-  required: true
--
   description: "External hostname where clients will reach kibana"
   name: KIBANA_HOSTNAME
   required: true
@@ -83,3 +97,45 @@ parameters:
   description: "Internal URL for the master, for authentication retrieval"
   name: MASTER_URL
   value: "https://kubernetes.default.svc.cluster.local"
+-
+  description: "Amount of RAM to reserve per ElasticSearch instance."
+  name: ES_INSTANCE_RAM
+  value: "8G"
+-
+  description: "How many instances of ElasticSearch to deploy."
+  name: ES_CLUSTER_SIZE
+  required: true
+-
+  description: "Number of nodes required to elect a master (ES minimum_master_nodes). By default, derived from ES_CLUSTER_SIZE / 2 + 1."
+  name: ES_NODE_QUORUM
+-
+  description: "Number of nodes required to be present before the cluster will recover from a full restart. By default, one fewer than ES_CLUSTER_SIZE."
+  name: ES_RECOVER_AFTER_NODES
+-
+  description: "Number of nodes desired to be present before the cluster will recover from a full restart. By default, ES_CLUSTER_SIZE."
+  name: ES_RECOVER_EXPECTED_NODES
+-
+  description: "Timeout for *expected* nodes to be present when cluster is recovering from a full restart."
+  name: ES_RECOVER_AFTER_TIME
+  value: "5m"
+-
+  description: "Amount of RAM to reserve per ops ElasticSearch instance."
+  name: ES_OPS_INSTANCE_RAM
+  value: "8G"
+-
+  description: "How many ops instances of ElasticSearch to deploy. By default, ES_CLUSTER_SIZE."
+  name: ES_OPS_CLUSTER_SIZE
+-
+  description: "Number of ops nodes required to elect a master (ES minimum_master_nodes). By default, derived from ES_CLUSTER_SIZE / 2 + 1."
+  name: ES_OPS_NODE_QUORUM
+-
+  description: "Number of ops nodes required to be present before the cluster will recover from a full restart. By default, one fewer than ES_OPS_CLUSTER_SIZE."
+  name: ES_OPS_RECOVER_AFTER_NODES
+-
+  description: "Number of ops nodes desired to be present before the cluster will recover from a full restart. By default, ES_OPS_CLUSTER_SIZE."
+  name: ES_OPS_RECOVER_EXPECTED_NODES
+-
+  description: "Timeout for *expected* ops nodes to be present when cluster is recovering from a full restart."
+  name: ES_OPS_RECOVER_AFTER_TIME
+  value: "5m"
+

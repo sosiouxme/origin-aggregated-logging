@@ -10,13 +10,28 @@ project=${PROJECT:-default}
 master_url=${MASTER_URL:-https://kubernetes.default.svc.cluster.local:443}
 master_ca=${MASTER_CA:-/var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
 token_file=${TOKEN_FILE:-/var/run/secrets/kubernetes.io/serviceaccount/token}
-vol=${ES_VOLUME_CAPACITY:-1}
+# ES cluster parameters:
+es_instance_ram=${ES_INSTANCE_RAM:-256M}
+es_cluster_size=${ES_CLUSTER_SIZE:-1}
+es_node_quorum=${ES_NODE_QUORUM:-$((es_cluster_size/2+1))}
+es_recover_after_nodes=${ES_RECOVER_AFTER_NODES:-$((es_cluster_size-1))}
+es_recover_expected_nodes=${ES_RECOVER_EXPECTED_NODES:-$es_cluster_size}
+es_recover_after_time=${ES_RECOVER_AFTER_TIME:-5m}
+es_ops_instance_ram=${ES_OPS_INSTANCE_RAM:-512M}
+es_ops_cluster_size=${ES_OPS_CLUSTER_SIZE:-$es_cluster_size}
+es_ops_node_quorum=${ES_OPS_NODE_QUORUM:-$((es_ops_cluster_size/2+1))}
+es_ops_recover_after_nodes=${ES_OPS_RECOVER_AFTER_NODES:-$((es_ops_cluster_size-1))}
+es_ops_recover_expected_nodes=${ES_OPS_RECOVER_EXPECTED_NODES:-$es_ops_cluster_size}
+es_ops_recover_after_time=${ES_OPS_RECOVER_AFTER_TIME:-5m}
+
 # other env vars used:
 # WRITE_KUBECONFIG, KEEP_SUPPORT, ENABLE_OPS_CLUSTER
 # other env vars used (expect base64 encoding):
 # KIBANA_KEY, KIBANA_CERT, SERVER_TLS_JSON
 
-# set up configuration for client
+function join { local IFS="$1"; shift; echo "$*"; }
+
+# set up configuration for openshift client
 if [ -n "${WRITE_KUBECONFIG}" ]; then
     # craft a kubeconfig, usually at $KUBECONFIG location
     oc config set-cluster master \
@@ -87,7 +102,6 @@ CONF
 	sh scripts/generatePEMCert.sh kibana
 
 	# generate java store/trust for the ES SearchGuard plugin
-	function join { local IFS="$1"; shift; echo "$*"; }
 	sh scripts/generateJKSChain.sh logging-es "$(join , logging-es{,-ops}{,-cluster}{,.${project}.svc.cluster.local})"
 	# generate common node key for the SearchGuard plugin
 	openssl rand 16 | openssl enc -aes-128-cbc -nosalt -out $dir/searchguard_node_key.key -pass pass:pass
@@ -126,12 +140,29 @@ oc delete template --selector logging-infra=kibana
 oc delete template --selector logging-infra=fluentd
 oc delete template --selector logging-infra=elasticsearch
 oc delete template --selector logging-infra=elasticsearch-pv
-oc create -f templates/pv-nfs.yaml
-oc process -f templates/es.yaml -v "VOLUME_CAPACITY=${vol}" | oc create -f -
+
+es_params=$(join , \
+	ES_INSTANCE_RAM=${es_instance_ram} \
+	ES_NODE_QUORUM=${es_node_quorum} \
+	ES_RECOVER_AFTER_NODES=${es_recover_after_nodes} \
+	ES_RECOVER_EXPECTED_NODES=${es_recover_expected_nodes} \
+	ES_RECOVER_AFTER_TIME=${es_recover_after_time} \
+	)
+
+es_ops_params=$(join , \
+	ES_CLUSTER_NAME=es-ops \
+	ES_INSTANCE_RAM=${es_ops_instance_ram} \
+	ES_NODE_QUORUM=${es_ops_node_quorum} \
+	ES_RECOVER_AFTER_NODES=${es_ops_recover_after_nodes} \
+	ES_RECOVER_EXPECTED_NODES=${es_ops_recover_expected_nodes} \
+	ES_RECOVER_AFTER_TIME=${es_ops_recover_after_time} \
+	)
+
+oc process -f templates/es.yaml -v "${es_params}" | oc create -f -
 es_host=logging-es.${project}.svc.cluster.local
 es_ops_host=${es_host}
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
-	oc process -f templates/es.yaml -v "VOLUME_CAPACITY=${vol},ES_CLUSTER_NAME=es-ops" | oc create -f -
+	oc process -f templates/es.yaml -v "${es_ops_params}" | oc create -f -
 	es_ops_host=logging-es-ops.${project}.svc.cluster.local
 fi
 oc process -f templates/fluentd.yaml -v "ES_HOST=${es_host},OPS_HOST=${es_ops_host}"| oc create -f -

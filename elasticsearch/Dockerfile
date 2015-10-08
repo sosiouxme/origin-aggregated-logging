@@ -9,7 +9,12 @@ USER 0
 ENV HOME=/opt/app-root/src \
   JAVA_VER=1.8.0 \
   ES_VER=1.5.2 \
-  ES_CONF=/usr/share/elasticsearch/config/elasticsearch.yml
+  ES_CONF=/usr/share/elasticsearch/config/elasticsearch.yml \
+  INSTANCE_RAM=8G \
+  NODE_QUORUM=1 \
+  RECOVER_AFTER_NODES=1 \
+  RECOVER_EXPECTED_NODES=1 \
+  RECOVER_AFTER_TIME=5m
 
 LABEL io.k8s.description="Elasticsearch container for allowing indexing and searching of aggregated logs" \
   io.k8s.display-name="Elasticsearch 1.5.2" \
