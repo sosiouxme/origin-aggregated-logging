@@ -9,7 +9,7 @@ objects:
 - apiVersion: "v1"
   kind: "Template"
   metadata:
-    name: logging-kibana-template
+    name: logging-${KIBANA_DEPLOY_NAME}-template
     annotations:
       description: "Template for deploying log viewer Kibana connecting to ElasticSearch to visualize aggregated cluster logs."
       tags: "infrastructure"
@@ -18,21 +18,21 @@ objects:
   labels:
     logging-infra: kibana
     provider: openshift
-    component: kibana
+    component: ${KIBANA_DEPLOY_NAME}
   objects:
   -
     apiVersion: "v1"
     kind: "DeploymentConfig"
     metadata:
-      name: "logging-kibana"
+      name: "logging-${KIBANA_DEPLOY_NAME}"
       labels:
         provider: openshift
-        component: "kibana"
+        component: "${KIBANA_DEPLOY_NAME}"
     spec:
       replicas: 1
       selector:
         provider: openshift
-        component: "kibana"
+        component: "${KIBANA_DEPLOY_NAME}"
       triggers:
       - type: ConfigChange
       - type: ImageChange
@@ -60,10 +60,10 @@ objects:
         type: Rolling
       template:
         metadata:
-          name: "kibana"
+          name: "${KIBANA_DEPLOY_NAME}"
           labels:
             provider: openshift
-            component: "kibana"
+            component: "${KIBANA_DEPLOY_NAME}"
         spec:
           serviceAccountName: aggregated-logging-kibana
           containers:
@@ -126,6 +126,10 @@ objects:
               secret:
                 secretName: logging-kibana-proxy
 parameters:
+-
+  name: KIBANA_DEPLOY_NAME
+  description: "Modify to differentiate regular and ops UI."
+  value: "kibana"
 -
   description: "Internal URL for the master, for authentication retrieval"
   name: OAP_MASTER_URL

@@ -90,6 +90,10 @@ parameters:
   name: KIBANA_HOSTNAME
   required: true
 -
+  description: "External hostname at which admins will visit the ops Kibana."
+  name: KIBANA_OPS_HOSTNAME
+  value: kibana-ops.example.com
+-
   description: "External URL for the master, for OAuth purposes"
   name: PUBLIC_MASTER_URL
   required: true

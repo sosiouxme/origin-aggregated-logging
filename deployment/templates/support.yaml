@@ -28,6 +28,7 @@ objects:
     secret: ${OAUTH_SECRET}
     redirectURIs:
     - https://${KIBANA_HOSTNAME}
+    - https://${KIBANA_OPS_HOSTNAME}
   -
     apiVersion: v1
     kind: Route
@@ -38,6 +39,18 @@ objects:
       to:
         kind: Service
         name: logging-kibana
+      tls:
+        termination: passthrough
+  -
+    apiVersion: v1
+    kind: Route
+    metadata:
+      name: kibana-ops
+    spec:
+      host: ${KIBANA_OPS_HOSTNAME}
+      to:
+        kind: Service
+        name: logging-kibana-ops
       tls:
         termination: passthrough
   -
@@ -77,6 +90,10 @@ parameters:
   description: "Hostname at which users will visit Kibana and be authenticated."
   name: KIBANA_HOSTNAME
   required: true
+-
+  description: "Hostname at which admins will visit the ops Kibana."
+  name: KIBANA_OPS_HOSTNAME
+  value: kibana-ops.example.com
 -
   description: 'Specify prefix for logging component images; e.g. for "openshift/origin-logging-deployer:v1.1", set prefix "openshift/origin-"'
   name: IMAGE_PREFIX

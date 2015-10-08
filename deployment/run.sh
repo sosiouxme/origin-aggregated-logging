@@ -4,6 +4,7 @@ dir=${SCRATCH_DIR:-_output}  # for writing files to bundle into secrets
 image_prefix=${IMAGE_PREFIX:-openshift/}
 image_version=${IMAGE_VERSION:-latest}
 hostname=${KIBANA_HOSTNAME:-kibana.example.com}
+ops_hostname=${KIBANA_OPS_HOSTNAME:-kibana-ops.example.com}
 public_master_url=${PUBLIC_MASTER_URL:-https://kubernetes.default.svc.cluster.local:443}
 project=${PROJECT:-default}
 # only needed for writing a kubeconfig:
@@ -75,7 +76,7 @@ if [ "${KEEP_SUPPORT}" != true ]; then
 	    openshift admin ca create-server-cert  \
 	      --key=$dir/kibana.key \
 	      --cert=$dir/kibana.crt \
-	      --hostnames=kibana,${hostname} \
+	      --hostnames=kibana,${hostname},${ops_hostname} \
 	      --signer-cert="$dir/ca.crt" --signer-key="$dir/ca.key" --signer-serial="$dir/ca.serial.txt"
 	fi
 
@@ -162,16 +163,17 @@ es_ops_params=$(join , \
 oc process -f templates/es.yaml -v "${es_params}" | oc create -f -
 es_host=logging-es.${project}.svc.cluster.local
 es_ops_host=${es_host}
+oc process -f templates/kibana.yaml -v "OAP_PUBLIC_MASTER_URL=${public_master_url}" | oc create -f -
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
 	oc process -f templates/es.yaml -v "${es_ops_params}" | oc create -f -
 	es_ops_host=logging-es-ops.${project}.svc.cluster.local
+	oc process -f templates/kibana.yaml -v "OAP_PUBLIC_MASTER_URL=${public_master_url},KIBANA_DEPLOY_NAME=kibana-ops" | oc create -f -
 fi
 oc process -f templates/fluentd.yaml -v "ES_HOST=${es_host},OPS_HOST=${es_ops_host}"| oc create -f -
-oc process -f templates/kibana.yaml -v "OAP_PUBLIC_MASTER_URL=${public_master_url}" | oc create -f -
 
 if [ "${KEEP_SUPPORT}" != true ]; then
 	oc delete template --selector logging-infra=support
-	oc process -f templates/support.yaml -v "OAUTH_SECRET=$(cat $dir/oauth-secret),KIBANA_HOSTNAME=${hostname},IMAGE_PREFIX=${image_prefix},IMAGE_VERSION=${image_version}" | oc create -f -
+	oc process -f templates/support.yaml -v "OAUTH_SECRET=$(cat $dir/oauth-secret),KIBANA_HOSTNAME=${hostname},KIBANA_OPS_HOSTNAME=${ops_hostname},IMAGE_PREFIX=${image_prefix},IMAGE_VERSION=${image_version}" | oc create -f -
 	oc process -f templates/support-pre.yaml | oc create -f -
 fi
 
@@ -187,13 +189,14 @@ oc delete all --selector logging-infra=elasticsearch
 for ((n=0;n<${es_cluster_size};n++)); do
 	oc process logging-es-template | oc create -f -
 done
+oc process logging-fluentd-template | oc create -f -
+oc process logging-kibana-template | oc create -f -
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
 	for ((n=0;n<${es_ops_cluster_size};n++)); do
 		oc process logging-es-ops-template | oc create -f -
 	done
+	oc process logging-kibana-ops-template | oc create -f -
 fi
-oc process logging-fluentd-template | oc create -f -
-oc process logging-kibana-template | oc create -f -
 
 
 set +x
@@ -255,14 +258,14 @@ Your deployments will likely need to specify persistent storage volumes
 and node selectors.
 
 To attach persistent storage, you can modify each deployment through
-`oc volume`. For example, to use a local directory on the host:
+'oc volume'. For example, to use a local directory on the host:
 
     oc volume dc/logging-es-rca2m9u8 \
 	      --add --overwrite --name=elasticsearch-storage \
               --type=hostPath --path=/path/to/storage
 
 There is no helpful command for adding a node selector. You will need to
-`oc edit` each deployment and add the `nodeSelector` element to specify
+'oc edit' each deployment and add the 'nodeSelector' element to specify
 the label corresponding to your desired nodes, e.g.:
 
     apiVersion: v1
