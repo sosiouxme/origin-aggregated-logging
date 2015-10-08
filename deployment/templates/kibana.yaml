@@ -65,7 +65,7 @@ objects:
             provider: openshift
             component: "kibana"
         spec:
-          serviceAccountName: aggregated-logging
+          serviceAccountName: aggregated-logging-kibana
           containers:
             -
               name: "kibana"

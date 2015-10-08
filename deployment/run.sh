@@ -172,7 +172,28 @@ oc process -f templates/kibana.yaml -v "OAP_PUBLIC_MASTER_URL=${public_master_ur
 if [ "${KEEP_SUPPORT}" != true ]; then
 	oc delete template --selector logging-infra=support
 	oc process -f templates/support.yaml -v "OAUTH_SECRET=$(cat $dir/oauth-secret),KIBANA_HOSTNAME=${hostname},IMAGE_PREFIX=${image_prefix},IMAGE_VERSION=${image_version}" | oc create -f -
+	oc process -f templates/support-pre.yaml | oc create -f -
 fi
+
+echo "(Re-)Creating deployed objects"
+if [ "${KEEP_SUPPORT}" != true ]; then
+	oc delete sa,service --selector logging-infra=support
+	oc process logging-support-pre-template | oc create -f -
+fi
+
+oc delete all --selector logging-infra=kibana
+oc delete all --selector logging-infra=fluentd
+oc delete all --selector logging-infra=elasticsearch
+for ((n=0;n<${es_cluster_size};n++)); do
+	oc process logging-es-template | oc create -f -
+done
+if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
+	for ((n=0;n<${es_ops_cluster_size};n++)); do
+		oc process logging-es-ops-template | oc create -f -
+	done
+fi
+oc process logging-fluentd-template | oc create -f -
+oc process logging-kibana-template | oc create -f -
 
 
 set +x
@@ -180,9 +201,12 @@ echo 'Success!'
 sa="system:serviceaccount:${project}:aggregated-logging-fluentd"
 support_section=''
 if [ "${KEEP_SUPPORT}" != true ]; then
-	support_section="    oc delete all,sa,oauthclient --selector logging-infra=support
+	support_section="
+If you are replacing a previous deployment, delete the previous objects:
 
-Create the supporting definitions (you must be cluster admin):
+    oc delete route,is,oauthclient --selector logging-infra=support
+
+Create the supporting definitions:
 
     oc process logging-support-template | oc create -f -
 
@@ -197,13 +221,12 @@ Add one line as the user at the end:
 Give the account access to read labels from all pods:
 
     openshift admin policy add-cluster-role-to-user cluster-reader $sa
-
-Finally, instantiate the logging components.
 "
 fi
 ops_cluster_section=""
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
-	ops_cluster_section="Do the same to create your ops cluster:
+	ops_cluster_section="
+And similarly for your ops cluster:
 
     oc process logging-es-ops-template | oc create -f -
 "
@@ -213,46 +236,50 @@ cat <<EOF
 
 =================================
 
-The deployer has created the secrets and templates required to deploy logging.
-You should now use the templates as follows.
-
-If you need to delete a previous deployment first, do the following:
-
-    oc delete all --selector logging-infra=kibana
-    oc delete all --selector logging-infra=fluentd
-    oc delete all,pvc --selector logging-infra=elasticsearch
+The deployer has created secrets, service accounts, templates, and
+component deployments required required for logging. You now have a few
+steps to run as cluster-admin.
 ${support_section}
 ElasticSearch:
 --------------
+Clustered instances have been created as individual deployments:
 
     oc process logging-es-template | oc create -f -
-
-You may repeat this multiple times to create multiple instances that will cluster.
 ${ops_cluster_section}
-Each instance requires that a PersistentVolume be created for persistent
-storage before it will deploy. If you have NFS volumes you would like
-to use, you can create them with the supplied template:
+You can find all of the deployments with:
 
-    oc process logging-pv-template \
-	    -v SIZE=50,NFS_SERVER=<addr>,NFS_PATH=/path \
-	    | oc create -f -
+    oc get dc --selector logging-infra=elasticsearch
+
+Your deployments will likely need to specify persistent storage volumes
+and node selectors.
+
+To attach persistent storage, you can modify each deployment through
+`oc volume`. For example, to use a local directory on the host:
+
+    oc volume dc/logging-es-rca2m9u8 \
+	      --add --overwrite --name=elasticsearch-storage \
+              --type=hostPath --path=/path/to/storage
+
+There is no helpful command for adding a node selector. You will need to
+`oc edit` each deployment and add the `nodeSelector` element to specify
+the label corresponding to your desired nodes, e.g.:
+
+    apiVersion: v1
+    kind: DeploymentConfig
+    spec:
+      nodeSelector:
+        nodelabel: logging-infra-1
 
 Fluentd:
 --------------
-
-    oc process logging-fluentd-template | oc create -f -
-
-You may scale the resulting deployment normally to the number of nodes:
+You may scale the Fluentd deployment normally to the number of nodes:
 
     oc scale dc/logging-fluentd --replicas=3
     oc scale rc/logging-fluentd-1 --replicas=3
 
 Kibana:
 --------------
-
-    oc process logging-kibana-template | oc create -f -
-
-You may scale the resulting deployment normally for redundancy:
+You may scale the Kibana deployment normally for redundancy:
 
     oc scale dc/logging-kibana --replicas=2
     oc scale rc/logging-kibana-1 --replicas=2
