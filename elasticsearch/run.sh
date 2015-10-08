@@ -4,10 +4,15 @@ mkdir -p /elasticsearch/$CLUSTER_NAME
 ln -s /etc/elasticsearch/keys/searchguard.key /elasticsearch/$CLUSTER_NAME/searchguard_node_key.key
 
 # do an initial run to initialize the SearchGuard ACL
-sed --in-place=.bak 's/searchguard.ssl.transport.http.enabled: true/searchguard.ssl.transport.http.enabled: false/' $ES_CONF
-sed -i 's/allow_all_from_loopback: false/allow_all_from_loopback: true/' $ES_CONF
-echo "" >> $ES_CONF
-echo "network.host: 127.0.0.1" >> $ES_CONF
+sed --in-place=.bak '
+	s/searchguard.ssl.transport.http.enabled: true/searchguard.ssl.transport.http.enabled: false/
+	s/allow_all_from_loopback: false/allow_all_from_loopback: true/
+    	s/minimum_master_nodes: .*/minimum_master_nodes: 1/
+	s/recover_after_nodes: .*/recover_after_nodes: 1/
+	s/expected_nodes: .*/expected_nodes: 1/
+	$a\
+network.host: 127.0.0.1
+	' $ES_CONF
 
 nohup /usr/share/elasticsearch/bin/elasticsearch -Des.pidfile=./elasticsearch.pid &
 until $(curl -s -f -o /dev/null --connect-timeout 1 -m 1 --head http://localhost:9200); do

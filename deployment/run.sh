@@ -142,6 +142,7 @@ oc delete template --selector logging-infra=elasticsearch
 oc delete template --selector logging-infra=elasticsearch-pv
 
 es_params=$(join , \
+	ES_CLUSTER_NAME=es \
 	ES_INSTANCE_RAM=${es_instance_ram} \
 	ES_NODE_QUORUM=${es_node_quorum} \
 	ES_RECOVER_AFTER_NODES=${es_recover_after_nodes} \
