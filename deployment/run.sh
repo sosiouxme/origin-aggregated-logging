@@ -60,7 +60,7 @@ if [ "${KEEP_SUPPORT}" != true ]; then
 	      --key="${dir}/ca.key" \
 	      --cert="${dir}/ca.crt" \
 	      --serial="${dir}/ca.serial.txt" \
-	      --name="logging-signer-$$"
+	      --name="logging-signer-$(date +%Y%m%d%H%M%S)"
 	fi
 
 	# use or generate Kibana proxy certs
@@ -198,7 +198,8 @@ oc process logging-kibana-template | oc create -f -
 
 set +x
 echo 'Success!'
-sa="system:serviceaccount:${project}:aggregated-logging-fluentd"
+saf="system:serviceaccount:${project}:aggregated-logging-fluentd"
+sae="system:serviceaccount:${project}:aggregated-logging-elasticsearch"
 support_section=''
 if [ "${KEEP_SUPPORT}" != true ]; then
 	support_section="
@@ -216,11 +217,11 @@ Enable fluentd service account - edit SCC with the following
 
 Add one line as the user at the end:
 
-- $sa
+- $saf
 
 Give the account access to read labels from all pods:
 
-    openshift admin policy add-cluster-role-to-user cluster-reader $sa
+    openshift admin policy add-cluster-role-to-user cluster-reader $saf
 "
 fi
 ops_cluster_section=""
