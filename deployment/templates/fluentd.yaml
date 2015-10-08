@@ -29,7 +29,7 @@ objects:
         provider: openshift
         component: "fluentd"
     spec:
-      replicas: 1
+      replicas: 0
       selector:
         provider: openshift
         component: "fluentd"

@@ -32,6 +32,11 @@ es_ops_recover_after_time=${ES_OPS_RECOVER_AFTER_TIME:-5m}
 
 function join { local IFS="$1"; shift; echo "$*"; }
 
+if [ "${KEEP_SUPPORT}" != true ]; then
+	# this fails in the container, but it's useful for dev
+	rm -rf $dir && mkdir -p $dir && chmod 700 $dir || :
+fi
+
 # set up configuration for openshift client
 if [ -n "${WRITE_KUBECONFIG}" ]; then
     # craft a kubeconfig, usually at $KUBECONFIG location
@@ -49,8 +54,6 @@ if [ -n "${WRITE_KUBECONFIG}" ]; then
 fi
 
 if [ "${KEEP_SUPPORT}" != true ]; then
-	rm -rf $dir && mkdir -p $dir && chmod 700 $dir || :
-
 	# cp/generate CA
 	if [ -s /secret/ca.key ]; then
 		cp {/secret,$dir}/ca.key
@@ -230,9 +233,12 @@ fi
 ops_cluster_section=""
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
 	ops_cluster_section="
-And similarly for your ops cluster:
-
-    oc process logging-es-ops-template | oc create -f -
+Operations logs:
+----------------
+You chose to split ops logs to their own ops cluster, which includes an
+ElasticSearch cluster and its own deployment of Kibana. The deployments
+are set apart by '-ops' in the name. The comments above about configuring
+ES and scaling Kibana apply equally to the ops cluster.
 "
 fi
 
@@ -246,11 +252,7 @@ steps to run as cluster-admin.
 ${support_section}
 ElasticSearch:
 --------------
-Clustered instances have been created as individual deployments:
-
-    oc process logging-es-template | oc create -f -
-${ops_cluster_section}
-You can find all of the deployments with:
+Clustered instances have been created as individual deployments.
 
     oc get dc --selector logging-infra=elasticsearch
 
@@ -258,10 +260,11 @@ Your deployments will likely need to specify persistent storage volumes
 and node selectors.
 
 To attach persistent storage, you can modify each deployment through
-'oc volume'. For example, to use a local directory on the host:
+'oc volume'. For example, to use a local directory on the host (requires
+adding $sae to the privileged SCC):
 
-    oc volume dc/logging-es-rca2m9u8 \
-	      --add --overwrite --name=elasticsearch-storage \
+    oc volume dc/logging-es-rca2m9u8 \\
+	      --add --overwrite --name=elasticsearch-storage \\
               --type=hostPath --path=/path/to/storage
 
 There is no helpful command for adding a node selector. You will need to
@@ -276,15 +279,16 @@ the label corresponding to your desired nodes, e.g.:
 
 Fluentd:
 --------------
-You may scale the Fluentd deployment normally to the number of nodes:
+Fluentd is deployed with no replicas. Scale it to the number of nodes:
 
     oc scale dc/logging-fluentd --replicas=3
     oc scale rc/logging-fluentd-1 --replicas=3
 
 Kibana:
 --------------
-You may scale the Kibana deployment normally for redundancy:
+You may scale the Kibana deployment for redundancy:
 
     oc scale dc/logging-kibana --replicas=2
     oc scale rc/logging-kibana-1 --replicas=2
+${ops_cluster_section}
 EOF

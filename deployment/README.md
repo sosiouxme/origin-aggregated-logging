@@ -68,7 +68,7 @@ The deployer must run under a special service account defined as follows:
     - name: logging-deployer
     API
 
-    openshift policy add-role-to-user edit \
+    oc policy add-role-to-user edit \
               system:serviceaccount:logging:logging-deployer
 
 Note that you should replace ":logging:" with the project name.
