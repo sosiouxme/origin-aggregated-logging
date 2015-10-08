@@ -39,10 +39,14 @@ objects:
           value: ${ENABLE_OPS_CLUSTER}
         - name: KIBANA_HOSTNAME
           value: ${KIBANA_HOSTNAME}
+        - name: KIBANA_OPS_HOSTNAME
+          value: ${KIBANA_OPS_HOSTNAME}
         - name: PUBLIC_MASTER_URL
           value: ${PUBLIC_MASTER_URL}
         - name: MASTER_URL
           value: ${MASTER_URL}
+        - name: ES_INSTANCE_RAM
+          value: ${ES_INSTANCE_RAM}
         - name: ES_CLUSTER_SIZE
           value: ${ES_CLUSTER_SIZE}
         - name: ES_NODE_QUORUM
@@ -53,6 +57,8 @@ objects:
           value: ${ES_RECOVER_EXPECTED_NODES}
         - name: ES_RECOVER_AFTER_TIME
           value: ${ES_RECOVER_AFTER_TIME}
+        - name: ES_OPS_INSTANCE_RAM
+          value: ${ES_OPS_INSTANCE_RAM}
         - name: ES_OPS_CLUSTER_SIZE
           value: ${ES_OPS_CLUSTER_SIZE}
         - name: ES_OPS_NODE_QUORUM

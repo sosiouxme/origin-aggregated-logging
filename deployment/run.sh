@@ -12,7 +12,7 @@ master_url=${MASTER_URL:-https://kubernetes.default.svc.cluster.local:443}
 master_ca=${MASTER_CA:-/var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
 token_file=${TOKEN_FILE:-/var/run/secrets/kubernetes.io/serviceaccount/token}
 # ES cluster parameters:
-es_instance_ram=${ES_INSTANCE_RAM:-256M}
+es_instance_ram=${ES_INSTANCE_RAM:-512M}
 es_cluster_size=${ES_CLUSTER_SIZE:-1}
 es_node_quorum=${ES_NODE_QUORUM:-$((es_cluster_size/2+1))}
 es_recover_after_nodes=${ES_RECOVER_AFTER_NODES:-$((es_cluster_size-1))}
