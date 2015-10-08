@@ -102,8 +102,10 @@ CONF
 	# generate client certs for accessing ES
 	cat /dev/null > $dir/ca.db
 	cat /dev/null > $dir/ca.crt.srl
-	sh scripts/generatePEMCert.sh fluentd
-	sh scripts/generatePEMCert.sh kibana
+	fluentd_user='$logging.$infra.$fluentd'
+	kibana_user='$logging.$infra.$kibana'
+	sh scripts/generatePEMCert.sh "$fluentd_user"
+	sh scripts/generatePEMCert.sh "$kibana_user"
 
 	# generate java store/trust for the ES SearchGuard plugin
 	sh scripts/generateJKSChain.sh logging-es "$(join , logging-es{,-ops}{,-cluster}{,.${project}.svc.cluster.local})"
@@ -125,7 +127,7 @@ CONF
 	    searchguard.key=$dir/searchguard_node_key.key
 	oc secrets new logging-kibana \
 	    ca=$dir/ca.crt \
-	    key=$dir/kibana.key cert=$dir/kibana.crt
+	    key=$dir/${kibana_user}.key cert=$dir/${kibana_user}.crt
 	oc secrets new logging-kibana-proxy \
 	    oauth-secret=$dir/oauth-secret \
 	    session-secret=$dir/session-secret \
@@ -134,7 +136,7 @@ CONF
 	    server-tls.json=$dir/server-tls.json
 	oc secrets new logging-fluentd \
 	    ca=$dir/ca.crt \
-	    key=$dir/fluentd.key cert=$dir/fluentd.crt
+	    key=$dir/${fluentd_user}.key cert=$dir/${fluentd_user}.crt
 
 fi # supporting infrastructure
 

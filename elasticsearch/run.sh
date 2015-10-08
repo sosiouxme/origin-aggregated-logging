@@ -34,20 +34,20 @@ if [ -z $(curl -s -f 'http://localhost:9200/searchguard/ac/ac') ]; then
       },
       {
         "__Comment__": "This is so that fluentd can only write",
-        "users": ["fluentd"],
+        "users": ["$logging.$infra.$fluentd"],
         "filters_bypass": [],
         "filters_execute": ["actionrequestfilter.fluentd"]
       },
       {
         "__Comment__": "This is so that Kibana can do anything in the .kibana index",
-        "users": ["kibana", "luke", "jeff", "eric", "jimmi"],
+        "users": ["$logging.$infra.$kibana"],
         "indices": [".kibana*"],
         "filters_bypass": ["*"],
         "filters_execute": []
       },
       {
         "__Comment__": "This is so that Kibana can only read in all indices",
-        "users": ["kibana", "luke", "jeff", "eric", "jimmi"],
+        "users": ["$logging.$infra.$kibana"],
         "filters_bypass": [],
         "filters_execute": ["actionrequestfilter.kibana"]
       }
