@@ -102,8 +102,8 @@ CONF
 	# generate client certs for accessing ES
 	cat /dev/null > $dir/ca.db
 	cat /dev/null > $dir/ca.crt.srl
-	fluentd_user='$logging.$infra.$fluentd'
-	kibana_user='$logging.$infra.$kibana'
+	fluentd_user='system.logging.fluentd'
+	kibana_user='system.logging.kibana'
 	sh scripts/generatePEMCert.sh "$fluentd_user"
 	sh scripts/generatePEMCert.sh "$kibana_user"
 
