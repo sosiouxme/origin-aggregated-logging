@@ -205,28 +205,22 @@ fi
 set +x
 echo 'Success!'
 saf="system:serviceaccount:${project}:aggregated-logging-fluentd"
-sae="system:serviceaccount:${project}:aggregated-logging-elasticsearch"
 support_section=''
 if [ "${KEEP_SUPPORT}" != true ]; then
 	support_section="
 If you are replacing a previous deployment, delete the previous objects:
-
     oc delete route,is,oauthclient --selector logging-infra=support
 
 Create the supporting definitions:
-
     oc process logging-support-template | oc create -f -
 
 Enable fluentd service account - edit SCC with the following
-
     oc edit scc/privileged
 
 Add one line as the user at the end:
-
 - $saf
 
-Give the account access to read labels from all pods:
-
+Give the account access to read pod metadata:
     openshift admin policy add-cluster-role-to-user cluster-reader $saf
 "
 fi
@@ -247,8 +241,8 @@ cat <<EOF
 =================================
 
 The deployer has created secrets, service accounts, templates, and
-component deployments required required for logging. You now have a few
-steps to run as cluster-admin.
+component deployments required for logging. You now have a few steps to
+run as cluster-admin. Consult the deployer docs for more detail.
 ${support_section}
 ElasticSearch:
 --------------
@@ -257,25 +251,9 @@ Clustered instances have been created as individual deployments.
     oc get dc --selector logging-infra=elasticsearch
 
 Your deployments will likely need to specify persistent storage volumes
-and node selectors.
-
+and node selectors. It's best to do this before spinning up fluentd.
 To attach persistent storage, you can modify each deployment through
-'oc volume'. For example, to use a local directory on the host (requires
-adding $sae to the privileged SCC):
-
-    oc volume dc/logging-es-rca2m9u8 \\
-	      --add --overwrite --name=elasticsearch-storage \\
-              --type=hostPath --path=/path/to/storage
-
-There is no helpful command for adding a node selector. You will need to
-'oc edit' each deployment and add the 'nodeSelector' element to specify
-the label corresponding to your desired nodes, e.g.:
-
-    apiVersion: v1
-    kind: DeploymentConfig
-    spec:
-      nodeSelector:
-        nodelabel: logging-infra-1
+'oc volume'.
 
 Fluentd:
 --------------

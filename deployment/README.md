@@ -57,7 +57,7 @@ An invocation supplying a properly signed Kibana cert might be:
 
 ## Create the Deployer ServiceAccount
 
-The deployer must run under a special service account defined as follows:
+The deployer must run under a service account defined as follows:
 
     oc create -f - <<API
     apiVersion: v1
@@ -71,19 +71,22 @@ The deployer must run under a special service account defined as follows:
     oc policy add-role-to-user edit \
               system:serviceaccount:logging:logging-deployer
 
-Note that you should replace ":logging:" with the project name.
+Note: replace `:logging:` with the project name.
 
 ## Run the Deployer
 
 You will need to specify the hostname at which Kibana should be exposed to client
 browsers, and also the master URL where client browsers will be directed for
-authenticating to OpenShift.
+authenticating to OpenShift. These and other parameters are availalble:
 
 * `KIBANA_HOSTNAME` (required): External hostname where web clients will reach Kibana
 * `PUBLIC_MASTER_URL` (required): External URL for the master, for OAuth purposes
 * `IMAGE_PREFIX`: Specify prefix for logging component images; e.g. for "openshift/origin-logging-deployer:v1.1", set prefix "openshift/origin-"
 * `IMAGE_VERSION`: Specify version for logging component images; e.g. for "openshift/origin-logging-deployer:v1.1", set version "v1.1"
-* `ENABLE_OPS_CLUSTER`: If "true", set up to use a second ES cluster and Kibana for ops logs.
+* `ES_INSTANCE_RAM`: Amount of RAM to reserve per ElasticSearch instance.
+* `ES_CLUSTER_SIZE`: How many instances of ElasticSearch to deploy. At least 3 are needed for redundancy, and more can be used for scaling.
+* `ENABLE_OPS_CLUSTER`: If "true", configure a second ES cluster and Kibana for ops logs.
+* `KIBANA_OPS_HOSTNAME`, `ES_OPS_INSTANCE_RAM`, `ES_OPS_CLUSTER_SIZE`: Parallel parameters for the ops log cluster.
 
 With example parameters:
 
@@ -91,8 +94,8 @@ With example parameters:
                -v KIBANA_HOSTNAME=kibana.example.com,PUBLIC_MASTER_URL=https://localhost:8443 \
                | oc create -f -
 
-Check the logs of the resulting pod for further instructions on deploying the result.
-They are described below.
+Check the logs of the resulting pod (`oc logs <pod name>`) for some instructions
+to follow after deployment. More details are given below.
 
 ## Deploy the templates created by the deployer
 
@@ -117,71 +120,85 @@ Give the account access to read labels from all pods:
 
 ### ElasticSearch
 
-Each instance of ElasticSearch requires specifying a volume for persistent
-storage. For an ephemeral deployment, you can deploy without persistent
-storage and all data will be lost any time a pod is restarted.
+Scaling a deployment today assumes that all pods can safely share
+any volumes specified in the deployment. This is not the case with
+ElasticSearch; each pod requires its own storage. Work is under way
+to enable specifying multiple volumes to be allocated to instances in
+a deployment, but for now multiple deployments are used in order to
+scale ElasticSearch. You can view them all with:
+
+    oc get dc --selector logging-infra=elasticsearch
+
+It is possible to scale your cluster up after creation by adding more
+deployments; however, when scaling up (or down), you must be aware of
+cluster parameters that vary by cluster size and adjust them accordingly
+for both new and existing deployments. Elastic [discusses these issues
+here](https://www.elastic.co/guide/en/elasticsearch/guide/current/_important_configuration_changes.html)
+and the corresponding parameters are coded into the deployments and the
+template below.
+
+The deployer defines a template which it uses to create ElasticSearch
+deployments. You can adjust and reuse it to add more:
 
     oc process logging-es-template | oc create -f -
 
-This creates a deployment of ElasticSearch for a single instance, with a
-unique name. Unless using ephemeral storage, this should not be scaled up
-because each instance requires its own storage, and there isn't a way to
-specify multiple volumes to be paired with multiple instances.
+These deployments all have different names but will cluster with each other
+via `service/logging-es-cluster`.
 
-Instead, to scale you can just create multiple deployments. You should
-create at least three for redundancy, and can create more for scaling.
+Refer to [Elastic's
+documentation](https://www.elastic.co/guide/en/elasticsearch/guide/current/hardware.html#_disks)
+for considerations involved in choosing storage and network location
+as directed below.
 
-For production use it is best to deploy with the correct definition from
-the start. This will require amendments to your deployment described
-below. The examples below assume you have saved a deployment to the
-`es-1.yaml` file:
+#### Storage
 
-    oc process logging-es-template -o yaml > es-1.yaml
+The deployer initially creates an ephemeral deployment in which all
+of a pod's data will be lost any time it is restarted. For production
+use you should specify a persistent storage volume for each deployment
+of ElasticSearch. Use the `oc volume` command for adding volumes to
+deployments.
 
-Once your deployment definition is suitable, you can invoke it with:
+For example, to use a local directory on the host (which is actually
+recommended by Elastic in order to take advantage of fast local disk):
 
-    oc create -f es-1.yaml
+    oc volume dc/logging-es-rca2m9u8 \
+              --add --overwrite --name=elasticsearch-storage \
+              --type=hostPath --path=/path/to/storage
+
+Note: In order to allow the pods to mount host volumes, you would usually
+need to add the `aggregated-logging-elasticsearch` service account to
+the privileged SCC as shown for Fluentd above.
+
+See `oc volume -h` for further options. E.g. if you have an NFS volume
+you would like to use, you can set it with:
+
+    oc volume dc/logging-es-rca2m9u8 \
+              --add --overwrite --name=elasticsearch-storage \
+              --source='{"nfs": {"server": "nfs.server.example.com", "path": "/exported/path"}}'
 
 #### Node selector
 
 ElasticSearch can be very resource-heavy, particularly in RAM, depending
-on the volume of logs your cluster generates.  Per Elastic's guidance,
+on the volume of logs your cluster generates. Per Elastic's guidance,
 all members of the cluster should have low latency network connections
-to each other. You will likely want to direct the instances to dedicated
+to each other.  You will likely want to direct the instances to dedicated
 nodes, or a dedicated region in your cluster. You can do this by supplying
 a node selector in each deployment.
 
 There is no helpful command for adding a node selector. You will need to
-hand-edit your deployment and add the `nodeSelector` element to specify
+hand-edit each DeploymentConfig and add the `nodeSelector` element to specify
 the label corresponding to your desired nodes, e.g.:
 
     apiVersion: v1
     kind: DeploymentConfig
     spec:
       nodeSelector:
-        nodelabel: logging-infra-1
+        nodelabel: logging-es-node-1
 
 Recall that the default scheduler algorithm will spread pods to different
 nodes (in the same region, if regions are defined). However this can
 have unexpected consequences in several scenarios and you will most
-likely want to label and specify specific nodes for ElasticSearch.
-
-#### Storage
-
-To attach persistent storage, you can process the definition through
-`oc volume` prior to creating it. For example, to use a local directory
-on the host (advisable in order to take advantage of fast local disk):
-
-    oc volume -f es-1.yaml --overwrite --name=elasticsearch-storage \
-              --type=hostPath --path=/path/to/storage \
-              -o yaml > es-1-vol.yaml
-
-See `oc volume -h` for further options. E.g. if you have an NFS volume
-you would like to use, you can set it with:
-
-    oc volume -f es-1.yaml --overwrite --name=elasticsearch-storage \
-              --source='{"nfs": {"server": "nfs.server.example.com", "path": "/exported/path"}}' \
-              -o yaml > es-1-vol.yaml
+likely want to label and specify designated nodes for ElasticSearch.
 
 #### Settings
 
@@ -190,6 +207,12 @@ There are some administrative settings that can be supplied (ref. [Elastic docum
 * `minimum_master_nodes` - the quorum required to elect a new master. Should be more than half the intended cluster size.
 * `recover_after_nodes` - when restarting the cluster, require this many nodes to be present before starting recovery.
 * `expected_nodes` and `recover_after_time` - when restarting the cluster, wait for number of nodes to be present or time to expire before starting recovery.
+
+These are, respectively, the `NODE_QUORUM`, `RECOVER_AFTER_NODES`,
+`RECOVER_EXPECTED_NODES`, and `RECOVER_AFTER_TIME` parameters in the
+deployments and the ES template. The deployer also enables specifying
+these parameters (with the `ES_` prefix), however usually its defaults
+should be sufficient.
 
 ### Fluentd
 
@@ -233,12 +256,10 @@ this domain).
 If you set `ENABLE_OPS_CLUSTER` to `true` for the deployer, fluentd
 expects to split logs between the main ElasticSearch cluster and another
 cluster reserved for operations logs (node logs and `default` project).
-Thus you need to deploy a separate ElasticSearch cluster and a separate
-Kibana to access it.
-
-The same instructions that referred to `logging-elasticsearch-template`
-and `logging-kibana-template` should be repeated for
-`logging-elasticsearch-ops-template` and `logging-kibana-ops-template`
+Thus a separate ElasticSearch cluster and a separate Kibana are deployed
+to index and access operations logs. These deployments are set apart with
+the `-ops` included in their names. The same considerations apply as
+for the main cluster.
 
 ## Cleanup and removal
 
@@ -253,4 +274,4 @@ to destroy the project:
     oc delete all --selector logging-infra=fluentd
     oc delete all --selector logging-infra=elasticsearch
     oc delete all,sa,oauthclient --selector logging-infra=support
-    oc delete secret logging-fluentd logging-elasticsearch logging-es-proxy logging-kibana logging-kibana-proxy
+    oc delete secret logging-fluentd logging-elasticsearch logging-es-proxy logging-kibana logging-kibana-proxy logging-kibana-ops-proxy
