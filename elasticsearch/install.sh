@@ -15,7 +15,7 @@ export CLUSTER_NAME=placeholder
 mkdir -p ${HOME}
 ln -s /usr/share/elasticsearch /usr/share/java/elasticsearch
 /usr/share/elasticsearch/bin/plugin -i com.floragunn/search-guard/0.5
-/usr/share/elasticsearch/bin/plugin -i io.fabric8.elasticsearch/openshift-elasticsearch-plugin/0.3
+/usr/share/elasticsearch/bin/plugin -i openshift-elasticsearch-plugin -u http://file.rdu.redhat.com/jcantril/openshift-elasticsearch-plugin-0.4-SNAPSHOT.zip
 /usr/share/elasticsearch/bin/plugin -i io.fabric8/elasticsearch-cloud-kubernetes/1.3.0
 mkdir /elasticsearch
 chmod -R og+w /usr/share/java/elasticsearch ${HOME} /elasticsearch
