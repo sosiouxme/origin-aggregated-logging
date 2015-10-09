@@ -25,11 +25,6 @@ For this document we will assume the `logging` project.
 You can use the default project if you want, but this implementation
 has no need to run in the default project.
 
-If we are forced to deploy fluentd as a static pod, the corresponding
-mirror pods will show up in the default project.  They will need to be
-configured with the full DNS name of the ElasticSearch service in order
-to enter data.
-
 ## Create the Deployer Secret
 
 All contents of the secret are optional, but the secret itself must always be
@@ -71,7 +66,7 @@ The deployer must run under a service account defined as follows:
     oc policy add-role-to-user edit \
               system:serviceaccount:logging:logging-deployer
 
-Note: replace `:logging:` with the project name.
+Note: change `:logging:` above to match the project name.
 
 ## Run the Deployer
 
@@ -216,40 +211,33 @@ should be sufficient.
 
 ### Fluentd
 
-Once you have ElasticSearch running as desired, deploy fluentd on every
-node to feed logs into it.
-
-    oc process logging-fluentd-template | oc create -f -
-
-You may scale the resulting deployment normally to the number of nodes:
+Fluentd is deployed with no replicas. Once you have ElasticSearch
+running as desired, scale fluentd to every node to feed logs into ES.
 
     oc scale dc/logging-fluentd --replicas=3
     oc scale rc/logging-fluentd-1 --replicas=3
 
-This implementation is not intended for production as it does not
-dynamically grow and shrink with the number of nodes, and uses a fake
-port reservation to prevent multiple replicas on one node. One of two
-methods is intended for production:
-
-1. Use the experimental DaemonController (once available) to schedule
-   the pod with a NodeSet including every node.
-2. Extract the pod definition from the template output, copy it to every
-   node, and ensure every node uses it as a static pod.
+Kubernetes is developing a method of scheduling a pod to dynamically run
+on every node (even as they come and go), but it is not yet available. As
+a workaround in the mean time, this implementation simply deploys an
+ordinary replication controller that should be manually scaled up or
+down as nodes come and go. The pod reserves a host port (1095 - which it
+does not actually listen on) in order to prevent multiple instances from
+running on the same node. However any pods that cannot be scheduled are
+still defined in the list of pods and may be perceived as clutter. This
+is only a workaround until the proper method of deployment is available.
 
 ### Kibana
 
-Finally, deploy the user interface, Kibana.
-
-    oc process logging-kibana-template | oc create -f -
-
-You may scale the resulting deployment normally for redundancy:
+You may scale the Kibana deployment normally for redundancy:
 
     oc scale dc/logging-kibana --replicas=2
     oc scale rc/logging-kibana-1 --replicas=2
 
-Once this is running, you should be able to visit the `KIBANA_HOSTNAME`
-specified above to visit the UI (assuming DNS points correctly for
-this domain).
+You should be able to visit the `KIBANA_HOSTNAME` specified in the
+initial deployment to visit the UI (assuming DNS points correctly for
+this domain). You will get a certificate warning if you did not provide
+a properly signed certificate.
 
 ### Ops cluster
 
