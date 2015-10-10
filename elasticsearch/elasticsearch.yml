@@ -17,6 +17,8 @@ gateway:
   expected_nodes: ${RECOVER_EXPECTED_NODES}
   recover_after_time: ${RECOVER_AFTER_TIME}
 
+io.fabric8.elasticsearch.authentication.users: ["system.logging.kibana", "system.logging.fluentd"]
+
 cloud:
   k8s:
     servicedns: ${SERVICE_DNS}
