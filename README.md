@@ -44,11 +44,12 @@ key/certs/secrets and deploy all of the components in concert.
 Choose the project you want to hold your logging infrastructure. It can be
 any project.
 
-Instantiate the [dev-builds template](hack/templates/dev-builds.yaml) to
-define builds for all images and ImageStreams to hold their output. You
-can do this before or after deployment. Deployment defines the same
-ImageStreams, so it is normal to see errors about already-defined
-ImageStreams when building from source and deploying.
+Instantiate the [dev-builds template](hack/templates/dev-builds.yaml)
+to define BuildConfigs for all images and ImageStreams to hold their
+output. You can do this before or after deployment, but before is
+recommended. A logging deployment defines the same ImageStreams, so it
+is normal to see errors about already-defined ImageStreams when building
+from source and deploying.
 
 The template has parameters to specify the repository and branch to use
 for the builds. The defaults are for origin master. To develop your own
@@ -63,8 +64,7 @@ problem:
 
     oc delete is/node -n openshift
 
-The builds should be started once defined; if any fail, you can retry
-them with
+The builds should start once defined; if any fail, you can retry them with:
 
     oc start-build <component>
 
@@ -72,8 +72,19 @@ e.g.
 
     oc start-build openshift-auth-proxy
 
-With the standard deployment, once a build completes successfully it
-will be automatically deployed.
+Once these builds complete successfully the ImageStreams will be
+populated and you can use them for a deployment. You will need to
+specify an `INDEX_PREFIX` pointing to their registry location, which
+you can get from:
+
+    $ oc get is
+    NAME                    DOCKER REPO
+    logging-deployment      172.30.90.128:5000/logs/logging-deployment
+
+In order to run a deployment with these images, you would process the
+[deployer template](deployment/deployer.yaml) with the 
+`IMAGE_PREFIX=172.30.90.128:5000/logs/` parameter. Proceed to the
+[deployer instructions](./deployment) to run a deployment.
 
 ## Running the deployer script locally
 
@@ -88,6 +99,6 @@ order to create everything with the right parameters. E.g.:
     cd deployment
     PROJECT=logging ./run.sh
 
-There are a number of environment this script looks at which are useful
+There are a number of env vars this script looks at which are useful
 when running directly; check the script headers for details.
 
