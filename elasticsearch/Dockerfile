@@ -18,7 +18,7 @@ ENV HOME=/opt/app-root/src \
 
 LABEL io.k8s.description="Elasticsearch container for allowing indexing and searching of aggregated logs" \
   io.k8s.display-name="Elasticsearch 1.5.2" \
-  io.openshift.expose-services="9200:http, 9300:http" \
+  io.openshift.expose-services="9200:https, 9300:https" \
   io.openshift.tags="logging,elk,elasticsearch"
 
 ADD elasticsearch.repo /etc/yum.repos.d/elasticsearch.repo
