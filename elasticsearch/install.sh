@@ -3,7 +3,7 @@
 set -ex
 
 rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch
-yum install -y -- setopt=tsflags=nodocs \
+yum install -y --setopt=tsflags=nodocs \
   java-1.8.0-openjdk \
   elasticsearch
 yum clean all
