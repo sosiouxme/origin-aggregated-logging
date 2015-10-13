@@ -1,0 +1,4 @@
+[efkstack]
+name=Elasticsearch FluentD and Kibana
+baseurl=http://buildvm-devops.usersys.redhat.com/puddle/build/AtomicOpenShift/3.1/latest/RH7-RHAOS-3.1/x86_64/os/
+gpgcheck=0
