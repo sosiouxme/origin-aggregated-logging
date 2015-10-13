@@ -1,4 +1,5 @@
-FROM rhel7:latest
+FROM openshift/base-centos7 
+#FROM rhel7:latest
 
 MAINTAINER OpenShift Development <dev@lists.openshift.redhat.com>
 
@@ -15,10 +16,10 @@ LABEL io.k8s.description="Kibana container for querying Elasticsearch for aggreg
 
 ADD efk.repo /etc/yum.repos.d/elasticsearch.repo
 
+#    --disablerepo '*' \
+#    --enablerepo rhel-7-server-rpms \
+#    --enablerepo rhel-7-server-extras-rpms\
 RUN yum install -y --setopt=tsflags=nodocs \
-    --disablerepo '*' \
-    --enablerepo rhel-7-server-rpms \
-    --enablerepo rhel-7-server-extras-rpms\
     --enablerepo efkstack \
       kibana origin-kibana && \
       yum clean all && \
