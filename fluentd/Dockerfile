@@ -18,8 +18,8 @@ ADD efk.repo /etc/yum.repos.d/elasticsearch.repo
 RUN yum install -y --setopt=tsflags=nodocs \
     --disablerepo '*' \
     --enablerepo rhel-7-server-rpms \
-    --enablerepo rhel-7-server-extras-rpms\
-    --enablerepo rhel-7-server-optional-rpms\
+    --enablerepo rhel-7-server-extras-rpms \
+    --enablerepo rhel-7-server-optional-rpms \
     --enablerepo efkstack \
     fluentd rubygem-fluent-plugin-flatten-hash rubygem-fluent-plugin-kubernetes_metadata_filter && \
     yum clean all && \
