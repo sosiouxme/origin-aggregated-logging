@@ -1,4 +1,4 @@
-FROM rhel7:latest
+FROM rhel:latest
 
 MAINTAINER OpenShift Development <dev@lists.openshift.redhat.com>
 
