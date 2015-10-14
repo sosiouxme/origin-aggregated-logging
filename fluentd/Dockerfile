@@ -1,4 +1,4 @@
-FROM rhel:latest
+FROM centos:centos7
 
 MAINTAINER OpenShift Development <dev@lists.openshift.redhat.com>
 
@@ -13,19 +13,17 @@ LABEL io.k8s.description="Fluentd container for collecting of docker container l
   io.openshift.expose-services="9200:http, 9300:http" \
   io.openshift.tags="logging,elk,fluentd"
 
-ADD efk.repo /etc/yum.repos.d/elasticsearch.repo
+RUN rpmkeys --import file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7 && \
+  yum install -y --setopt=tsflags=nodocs \
+  gcc-c++ \
+  ruby \
+  ruby-devel \
+  libcurl-devel \
+  make && \
+  mkdir -p ${HOME} && \
+  gem install --no-ri fluentd fluent-plugin-kubernetes_metadata_filter fluent-plugin-elasticsearch fluent-plugin-flatten-hash
 
-RUN yum install -y --setopt=tsflags=nodocs \
-    --disablerepo '*' \
-    --enablerepo rhel-7-server-rpms \
-    --enablerepo rhel-7-server-extras-rpms \
-    --enablerepo rhel-7-server-optional-rpms \
-    --enablerepo efkstack \
-    fluentd rubygem-fluent-plugin-flatten-hash rubygem-fluent-plugin-kubernetes_metadata_filter && \
-    yum clean all && \
-    mkdir -p ${HOME}
-
-ADD out_elasticsearch*.rb ${GEM_HOME}/gems/fluent-plugin-elasticsearch-1.0.0/lib/fluent/plugin/
+ADD out_elasticsearch*.rb /opt/app-root/src/gems/fluent-plugin-elasticsearch-1.0.0/lib/fluent/plugin/
 ADD fluent.conf /etc/fluent/fluent.conf
 
 WORKDIR ${HOME}
