@@ -83,6 +83,8 @@ objects:
           value: ${CURATOR_NODESELECTOR}
         - name: CURATOR_OPS_NODESELECTOR
           value: ${CURATOR_OPS_NODESELECTOR}
+        - name: MODE
+          value: ${MODE}
     dnsPolicy: ClusterFirst
     restartPolicy: Never
     serviceAccount: logging-deployer
@@ -190,3 +192,7 @@ parameters:
   description: "Node selector operations Curator (label=value)."
   name: CURATOR_OPS_NODESELECTOR
   value: ""
+-
+  description: "The mode that the deployer runs in."
+  name: MODE
+  value: "install"
