@@ -3,7 +3,7 @@ kind: "Template"
 metadata:
   name: logging-deployer-template
   annotations:
-    description: "Template for deploying everything needed for aggregated logging. Requires cluster-admin 'logging-deployer' service account and 'logging-deployer' secret."
+    description: "Template for running the aggregated logging deployer in a pod. Requires empowered 'logging-deployer' service account and 'logging-deployer' secret."
     tags: "infrastructure"
 labels:
   logging-infra: deployer

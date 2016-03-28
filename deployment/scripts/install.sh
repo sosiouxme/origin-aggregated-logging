@@ -59,12 +59,14 @@ kibana_ops_nodeselector=$(extract_nodeselector $KIBANA_OPS_NODESELECTOR)
 curator_nodeselector=$(extract_nodeselector $CURATOR_NODESELECTOR)
 curator_ops_nodeselector=$(extract_nodeselector $CURATOR_OPS_NODESELECTOR)
 
+######################################
+#
+# generate secret contents and secrets
+#
 if [ "${KEEP_SUPPORT}" != true ]; then
 	# this fails in the container, but it's useful for dev
 	rm -rf $dir && mkdir -p $dir && chmod 700 $dir || :
-fi
 
-if [ "${KEEP_SUPPORT}" != true ]; then
 	# cp/generate CA
 	if [ -s /secret/ca.key ]; then
 		cp {/secret,$dir}/ca.key
@@ -177,8 +179,11 @@ CONF
 
 fi # supporting infrastructure
 
+######################################
+#
 # (re)generate templates needed
-echo "Creating templates"
+#
+echo "(Re-)Creating templates"
 oc delete template --selector logging-infra=curator
 oc delete template --selector logging-infra=kibana
 oc delete template --selector logging-infra=fluentd
@@ -262,16 +267,22 @@ fi
 
 if [ "${KEEP_SUPPORT}" != true ]; then
 	oc delete template --selector logging-infra=support
-	oc process -f templates/support.yaml -v "OAUTH_SECRET=$(cat $dir/oauth-secret),KIBANA_HOSTNAME=${hostname},KIBANA_OPS_HOSTNAME=${ops_hostname}" | oc create -f -
-	oc process -f templates/images.yaml -v "IMAGE_PREFIX=${image_prefix},IMAGE_VERSION=${image_version}" | oc create -f -
-	oc process -f templates/support-pre.yaml | oc create -f -
+	oc process -f templates/support.yaml -v "OAUTH_SECRET=$(cat $dir/oauth-secret),KIBANA_HOSTNAME=${hostname},KIBANA_OPS_HOSTNAME=${ops_hostname},IMAGE_PREFIX=${image_prefix},IMAGE_VERSION=${image_version}" | oc create -f -
 fi
 
+######################################
+#
+# Create "things", mostly from templates
+#
 echo "(Re-)Creating deployed objects"
 if [ "${KEEP_SUPPORT}" != true ]; then
-	oc delete sa,service --selector logging-infra=support
-	oc process logging-support-pre-template | oc create -f -
-fi
+	oc process logging-support-template | oc delete -f - || :
+	oc delete serviceaccount,service,route --selector logging-infra=support
+	oc process logging-support-template | oc create -f -
+        oc create route passthrough --service="logging-kibana" --hostname="${hostname}"
+        oc create route passthrough --service="logging-kibana-ops" --hostname="${ops_hostname}"
+fi 
+oc process logging-imagestream-template | oc create -f - || : # these may fail if already created; that's ok
 
 oc delete dc,rc,pod --selector logging-infra=curator
 oc delete dc,rc,pod --selector logging-infra=kibana
@@ -301,21 +312,7 @@ fi
 
 set +x
 echo 'Success!'
-saf="system:serviceaccount:${project}:aggregated-logging-fluentd"
 fns=${FLUENTD_NODESELECTOR:-logging-infra-fluentd=true}
-support_section=''
-if [ "${KEEP_SUPPORT}" != true ]; then
-	support_section="
-Create the supporting definitions:
-    oc process logging-images-template | oc create -f -
-
-Enable fluentd service account - run the following
-    oadm policy add-scc-to-user hostmount-anyuid $saf
-
-Give the account access to read pod metadata:
-    openshift admin policy add-cluster-role-to-user cluster-reader $saf
-"
-fi
 ops_cluster_section=""
 if [ "${ENABLE_OPS_CLUSTER}" == true ]; then
 	ops_cluster_section="
@@ -324,7 +321,7 @@ Operations logs:
 You chose to split ops logs to their own ops cluster, which includes an
 ElasticSearch cluster and its own deployment of Kibana. The deployments
 are set apart by '-ops' in the name. The comments above about configuring
-ES and scaling Kibana apply equally to the ops cluster.
+ES apply equally to the ops cluster.
 "
 fi
 
@@ -334,12 +331,11 @@ cat <<EOF
 
 The deployer has created secrets, service accounts, templates, and
 component deployments required for logging. You now have a few steps to
-run as cluster-admin. Consult the deployer docs for more detail.
-${support_section}
+run manually. Consult the deployer docs for more detail.
+
 ElasticSearch:
 --------------
-Clustered instances have been created as individual deployments.
-
+Clustered instances have been created as individual deployments. View with:
     oc get dc --selector logging-infra=elasticsearch
 
 Your deployments will likely need to specify persistent storage volumes
@@ -350,14 +346,10 @@ To attach persistent storage, you can modify each deployment through
 Fluentd:
 --------------
 Fluentd is deployed to nodes via a Daemon Set. Label the nodes to deploy it to:
-
     oc label node/<node-name> ${fns}
 
-Kibana:
---------------
-You may scale the Kibana deployment for redundancy:
-
-    oc scale dc/logging-kibana --replicas=2
-    oc scale rc/logging-kibana-1 --replicas=2
+To label all nodes at once:
+    oc label nodes --all ${fns}
 ${ops_cluster_section}
 EOF
+
