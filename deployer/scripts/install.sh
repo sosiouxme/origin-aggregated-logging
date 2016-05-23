@@ -373,6 +373,10 @@ function generate_objects() {
   generate_kibana
   generate_curator
   generate_fluentd
+
+  for dc in $(oc get dc -l logging-infra -o name); do
+    oc deploy $dc --latest
+  done
 } #generate_objects()
 
 ######################################

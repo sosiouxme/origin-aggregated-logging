@@ -261,8 +261,11 @@ if [ "$ENABLE_OPS_CLUSTER" = "true" ] ; then
          system:serviceaccount:logging:aggregated-logging-elasticsearch"
     # update the ES_OPS DC to be in the privileged context
     # TODO: should not have to do this - should work the same as regular hostmount
-    os::cmd::expect_success "oc patch $(oc get dc -o name -l component=es-ops) \
+    ops_dc=$(oc get dc -o name -l component=es-ops)
+    os::cmd::expect_success "oc patch $ops_dc \
        -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"elasticsearch\",\"securityContext\":{\"privileged\": true}}]}}}}'"
+
+    os::cmd::try_until_text "oc deploy $ops_dc --latest" "Started" "$(( 3 * TIME_MIN ))"
 fi
 # see if expected pods are running
 os::cmd::try_until_text "oc get pods -l component=es" "Running" "$(( 3 * TIME_MIN ))"
@@ -296,6 +299,7 @@ if [ -n "$ES_VOLUME" ] ; then
                              --add --overwrite --name=elasticsearch-storage \
                              --type=hostPath --path=$ES_VOLUME"
     # start up es
+    os::cmd::try_until_text "oc deploy $esdc --latest" "Started" "$(( 3 * TIME_MIN ))"
     os::cmd::expect_success "oc scale dc $esdc --replicas=1"
     os::cmd::try_until_text "oc get pods -l component=es" "Running" "$(( 3 * TIME_MIN ))"
 fi
@@ -441,6 +445,18 @@ function removeAdminCert() {
   os::cmd::expect_success "oc patch secret logging-elasticsearch -p '{\"data\":{\"admin-cert\": null}}'"
 }
 
+function addTriggers() {
+  echo "Adding triggers"
+
+  # the upgrade script looks for
+  # oc get dc -l logging-infra -o jsonpath='{.items[?(@.spec.triggers[*].type)].metadata.name}'
+  # to exist
+
+  for dc in $(oc get dc -l logging-infra -o jsonpath='{.items[*].metadata.name}'); do
+    os::cmd::expect_success "oc patch dc/$dc -p '{ \"spec\": { \"triggers\": [{ \"type\" : \"ConfigChange\" }] } }'"
+  done
+}
+
 function upgrade() {
   echo "running with upgrade mode"
 
@@ -457,7 +473,7 @@ function upgrade() {
   UPGRADE_POD=$(get_latest_pod "component=deployer")
 
   # Giving the upgrade process a bit more time to run to completion... failed last time at 10 minutes
-  os::cmd::try_until_text "oc get pods $UPGRADE_POD" "Completed" "$(( 5 * TIME_MIN ))"
+  os::cmd::try_until_text "oc get pods $UPGRADE_POD" "Completed" "$(( 20 * TIME_MIN ))"
 
   os::cmd::try_until_text "oc get pods -l component=es" "Running" "$(( 3 * TIME_MIN ))"
   os::cmd::try_until_text "oc get pods -l component=kibana" "Running" "$(( 3 * TIME_MIN ))"
@@ -499,6 +515,7 @@ echo $TEST_DIVIDER
 removeCurator
 useFluentdDC
 removeAdminCert
+addTriggers
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 
@@ -506,17 +523,25 @@ echo $TEST_DIVIDER
 # test from first upgrade
 removeCurator
 useFluentdDC
+addTriggers
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
 # test from half upgrade
 removeCurator
+addTriggers
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
 useFluentdDC
+addTriggers
+upgrade
+./e2e-test.sh $USE_CLUSTER
+
+echo $TEST_DIVIDER
+addTriggers
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 

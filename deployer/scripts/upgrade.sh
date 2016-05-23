@@ -22,6 +22,12 @@ function getDeploymentVersion() {
     return
   fi
 
+  # Check for DC triggers
+  if [[ -n "$(oc get dc -l logging-infra -o jsonpath='{.items[?(@.spec.triggers[*].type)].metadata.name}')" ]]; then
+    echo 2
+    return
+  fi
+
   echo "$LOGGING_VERSION"
 }
 
@@ -391,22 +397,13 @@ function patchDCImage() {
   local image=$2
   local kibana=$3
   local version=$(oc get dc/$dc -o jsonpath='{.status.latestVersion}')
-  local indices=$(getArrayIndex "dc/$dc" ".spec.triggers" "Type" "ImageChange")
-  local authProxy_patch auth_proxy_index trigger_index
-
-  # find the index that authproxy
-  for index in ${indices[@]}; do
-    [[ "$(oc get dc/$dc -o jsonpath="{.spec.triggers[$index].imageChangeParams.from.name}")" =~ "logging-auth-proxy" ]] && auth_proxy_index=$index
-    [[ "$(oc get dc/$dc -o jsonpath="{.spec.triggers[$index].imageChangeParams.from.name}")" =~ "$image" ]] && trigger_index=$index
-  done
+  local authProxy_patch
 
   if [ "$kibana" = true ]; then
-    authProxy_patch="{.spec.template.spec.containers[1].image}=${IMAGE_PREFIX}logging-auth-proxy:${IMAGE_VERSION} \
-                     {.spec.triggers[$auth_proxy_index].imageChangeParams.from.name}=logging-auth-proxy:${IMAGE_VERSION}"
+    authProxy_patch="{.spec.template.spec.containers[1].image}=${IMAGE_PREFIX}logging-auth-proxy:${IMAGE_VERSION}"
   fi
 
   patchIfValid "dc/$dc" "{.spec.template.spec.containers[0].image}=${IMAGE_PREFIX}${image}:${IMAGE_VERSION} \
-                         {.spec.triggers[$trigger_index].imageChangeParams.from.name}=${image}:${IMAGE_VERSION} \
                          ${authProxy_patch}" && return 0
 
   echo "Did not patch dc/$dc successfully"
@@ -467,6 +464,10 @@ function add_curator() {
 
   generate_curator_template
   generate_curator
+
+  for dc in $(oc get dc -l logging-infra=curator -o name); do
+    oc deploy $dc --latest
+  done
 }
 
 function add_fluentd_daemonset() {
@@ -513,6 +514,14 @@ function regenerate_secrets_and_support_objects() {
   generate_support_objects
 }
 
+function remove_triggers() {
+
+  for dc in $(oc get dc -l logging-infra -o jsonpath='{.items[?(@.spec.triggers[*].type)].metadata.name}'); do
+    oc patch dc/$dc -p='{"spec": { "triggers" : [] } }'
+    oc deploy dc/$dc --latest
+  done
+}
+
 function upgrade_logging() {
 
   installedVersion=$(getDeploymentVersion)
@@ -522,6 +531,7 @@ function upgrade_logging() {
   # 0 -- just EFK
   # 1 -- admin cert
   # 2 -- curator & daemonset
+  # 3 -- no change triggers
 
   initialize_install_vars
 
@@ -547,6 +557,10 @@ function upgrade_logging() {
           add_curator
           # Add Fluentd Daemonset
           add_fluentd_daemonset
+          ;;
+        2)
+          # Remove triggers
+          remove_triggers
           ;;
         $LOGGING_VERSION)
           echo "Infrastructure changes for Aggregated Logging complete..."
