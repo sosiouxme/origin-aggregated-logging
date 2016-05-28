@@ -208,6 +208,10 @@ function generate_config() {
       done
     fi
 
+    generate_configmaps
+}
+
+function generate_configmaps() {
     ### ConfigMaps
     echo "Deleting configmaps"
     oc delete configmap -l logging-infra=support
@@ -225,9 +229,6 @@ function generate_config() {
       --from-file=config.yaml=conf/curator.yml
     oc label configmap/logging-curator logging-infra=support # make easier to delete later
 
-}
-function generate_secrets() { # legacy name
-  generate_config
 }
 
 function create_template_optional_nodeselector(){

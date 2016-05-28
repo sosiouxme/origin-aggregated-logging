@@ -404,6 +404,30 @@ if [ ! -n "$USE_LOGGING_DEPLOYER_SCRIPT" ] ; then
 fi
 
 #upgrade-test
+function join { local IFS="$1"; shift; echo "$*"; }
+function removeEsCuratorConfigMaps() {
+  echo "removing configmaps from ES and Curator"
+  # construct patch for ES
+  local dc patch=$(join , \
+    '{"op": "replace", "path": "/spec/template/spec/containers/0/volumeMounts/0/mountPath", "value": "/etc/elasticsearch/keys"}' \
+    '{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts/1"}' \
+    '{"op": "remove", "path": "/spec/template/spec/volumes/1"}' \
+  )
+  for dc in $(get_es_dcs); do
+    os::cmd::expect_success "oc patch $dc --type=json --patch '[$patch]'"
+  done
+  # construct patch for curator
+  patch=$(join , \
+    '{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts/1"}' \
+    '{"op": "remove", "path": "/spec/template/spec/volumes/1"}' \
+  )
+  for dc in $(get_curator_dcs); do
+    os::cmd::expect_success "oc patch $dc --type=json --patch '[$patch]'"
+  done
+  # delete the actual configmaps
+  os::cmd::expect_success "oc delete configmap/logging-elasticsearch configmap/logging-curator"
+}
+
 function removeCurator() {
   echo "removing curator"
   for curator_dc in $(oc get dc -l logging-infra=curator -o jsonpath='{.items[*].metadata.name}'); do
@@ -512,6 +536,7 @@ TEST_DIVIDER="------------------------------------------"
 
 echo $TEST_DIVIDER
 # test from base install
+removeEsCuratorConfigMaps
 removeCurator
 useFluentdDC
 removeAdminCert
@@ -521,6 +546,7 @@ upgrade
 
 echo $TEST_DIVIDER
 # test from first upgrade
+removeEsCuratorConfigMaps
 removeCurator
 useFluentdDC
 addTriggers
@@ -528,13 +554,16 @@ upgrade
 ./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
-# test from half upgrade
+# test from partial second upgrade
+removeEsCuratorConfigMaps
 removeCurator
 addTriggers
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
+# test from partial second upgrade
+removeEsCuratorConfigMaps
 useFluentdDC
 addTriggers
 upgrade
@@ -546,6 +575,7 @@ upgrade
 ./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
+# test no structural upgrade needed
 upgrade
 ./e2e-test.sh $USE_CLUSTER
 
