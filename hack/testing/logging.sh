@@ -38,7 +38,7 @@ ES_VOLUME=${ES_VOLUME:-/var/lib/es}
 ES_OPS_VOLUME=${ES_OPS_VOLUME:-/var/lib/es-ops}
 
 # use a few tools from the deployer
-source "deployer/scripts/util.sh"
+source "$OS_O_A_L_DIR/deployer/scripts/util.sh"
 
 # includes util.sh and text.sh
 source "${OS_ROOT}/hack/cmd_util.sh"
