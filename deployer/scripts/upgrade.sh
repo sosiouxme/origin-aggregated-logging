@@ -27,7 +27,12 @@ function getDeploymentVersion() {
     echo 2
     return
   fi
-  # TODO: check for configmaps on ES and curator - 3
+
+  # check for configmaps for ES and curator
+  if [[ -z "$(oc get configmap/logging-elasticsearch)" || -z "$(oc get configmap/logging-curator)" ]]; then
+    echo 3
+    return
+  fi
 
   echo "$LOGGING_VERSION"
 }
@@ -481,14 +486,6 @@ function add_fluentd_daemonset() {
   generate_fluentd
 }
 
-function get_es_dcs() {
-  oc get dc --selector logging-infra=elasticsearch -o name
-}
-
-function get_curator_dcs() {
-  oc get dc --selector logging-infra=curator -o name
-}
-
 function add_config_maps() {
   generate_configmaps
   echo "Supplying Elasticsearch with a ConfigMap..."
@@ -508,29 +505,6 @@ function add_config_maps() {
   for dc in $(get_curator_dcs); do
     oc patch $dc --type=json --patch "[$patch]"
   done
-}
-
-function removeEsCuratorConfigMaps() {
-  echo "removing configmaps from ES and Curator"
-  # construct patch for ES
-  local dc patch=$(join , \
-    '{"op": "replace", "path": "/spec/template/spec/containers/0/volumeMounts/0/mountPath", "value": "/etc/elasticsearch/keys"}' \
-    '{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts/1"}' \
-    '{"op": "remove", "path": "/spec/template/spec/volumes/1"}' \
-  )
-  for dc in $(get_es_dcs); do
-    os::cmd::expect_success "oc patch $dc --type=json --patch '[$patch]'"
-  done
-  # construct patch for curator
-  patch=$(join , \
-    '{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts/1"}' \
-    '{"op": "remove", "path": "/spec/template/spec/volumes/1"}' \
-  )
-  for dc in $(get_curator_dcs); do
-    os::cmd::expect_success "oc patch $dc --type=json --patch '[$patch]'"
-  done
-  # delete the actual configmaps
-  os::cmd::expect_success "oc delete configmap/logging-elasticsearch configmap/logging-curator"
 }
 
 function upgrade_notify() {
@@ -581,10 +555,10 @@ function upgrade_logging() {
   local migrate=
 
   # VERSIONS
-  # 0 -- just EFK
-  # 1 -- admin cert
-  # 2 -- curator & daemonset
-  # 3 -- no change triggers
+  # 0 -- initial EFK
+  # 1 -- add admin cert
+  # 2 -- add curator & use daemonset
+  # 3 -- remove change triggers on DCs
   # 4 -- supply ES/curator configmaps
 
   initialize_install_vars

@@ -37,6 +37,9 @@ TEST_PERF=${TEST_PERF:-false}
 ES_VOLUME=${ES_VOLUME:-/var/lib/es}
 ES_OPS_VOLUME=${ES_OPS_VOLUME:-/var/lib/es-ops}
 
+# use a few tools from the deployer
+source "deployer/scripts/util.sh"
+
 # includes util.sh and text.sh
 source "${OS_ROOT}/hack/cmd_util.sh"
 source "${OS_ROOT}/hack/lib/test/junit.sh"
@@ -404,7 +407,6 @@ if [ ! -n "$USE_LOGGING_DEPLOYER_SCRIPT" ] ; then
 fi
 
 #upgrade-test
-function join { local IFS="$1"; shift; echo "$*"; }
 function removeEsCuratorConfigMaps() {
   echo "removing configmaps from ES and Curator"
   # construct patch for ES
