@@ -421,7 +421,7 @@ if [ "$TEST_PERF" = "true" ] ; then
     echo "Running performance tests"
     for test in perf-*.sh ; do
         if [ -x ./$test ] ; then
-            ./$test $USE_CLUSTER
+            (. ./$test $USE_CLUSTER)
         fi
     done
 else
@@ -433,7 +433,7 @@ else
     # in production environments
     for test in test-*.sh ; do
         if [ -x ./$test ] ; then
-            ./$test $USE_CLUSTER
+            (. ./$test $USE_CLUSTER)
         fi
     done
 fi

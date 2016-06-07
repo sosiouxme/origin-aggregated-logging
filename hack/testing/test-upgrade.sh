@@ -26,14 +26,25 @@ fi
 TEST_DIVIDER="------------------------------------------"
 UPGRADE_POD=""
 
+function waitFor() {
+
+  local statement=$1
+  local TIMES=${2:-300}
+
+  for (( i=1; i<=$TIMES; i++ )); do
+    eval "$statement" && return 0
+    sleep 1
+  done
+  return 1
+}
+
 function removeCurator() {
   echo "removing curator"
   for curator_dc in $(oc get dc -l logging-infra=curator -o jsonpath='{.items[*].metadata.name}'); do
-    os::cmd::expect_success "oc delete dc $curator_dc"
+    oc delete dc $curator_dc || return 1
   done
 
-  curatorpod=$(oc get pod -l component=curator -o jsonpath='{.items[*].metadata.name}')
-  os::cmd::try_until_failure "oc describe pod $curatorpod > /dev/null" "$(( 3 * TIME_MIN ))"
+  waitFor "[[ -z \"\$(oc get pod -l component=curator -o name)\" ]]" "$(( 3 * TIME_MIN ))"
 }
 
 function useFluentdDC() {
@@ -43,18 +54,19 @@ function useFluentdDC() {
   ops_host=$(oc get pod $fluentdpod -o jsonpath='{.spec.containers[*].env[?(@.name=="OPS_HOST")].value}')
   ops_port=$(oc get pod $fluentdpod -o jsonpath='{.spec.containers[*].env[?(@.name=="OPS_PORT")].value}')
 
-  os::cmd::expect_success "oc delete daemonset logging-fluentd"
-  os::cmd::expect_success "oc delete template logging-fluentd-template"
+  oc delete daemonset logging-fluentd || return 1
+  oc delete template logging-fluentd-template || return 1
 
-  os::cmd::try_until_failure "oc describe pod $fluentdpod > /dev/null" "$(( 3 * TIME_MIN ))"
+  waitFor "[[ -z \"\$(oc get pod \$fluentdpod -o name)\" ]]" "$(( 3 * TIME_MIN ))"
 
-  os::cmd::expect_success "oc process -f templates/fluentd_dc.yaml \
-     -v IMAGE_PREFIX_DEFAULT=$imageprefix,OPS_HOST=$ops_host,OPS_PORT=$ops_port | oc create -f -"
+  oc process -f templates/fluentd_dc.yaml \
+     -v IMAGE_PREFIX_DEFAULT=$imageprefix,OPS_HOST=$ops_host,OPS_PORT=$ops_port | oc create -f - || return 1
 
-  os::cmd::expect_success "oc new-app logging-fluentd-template"
+  oc new-app logging-fluentd-template || return 1
 
-  os::cmd::expect_success "oc scale dc logging-fluentd --replicas=1"
-  os::cmd::try_until_text "oc get pods -l component=fluentd" "Running" "$(( 3 * TIME_MIN ))"
+  oc scale dc logging-fluentd --replicas=1 || return 1
+  waitFor "[[ \"Running\" == \"\$(oc get pods -l component=fluentd -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" && return 0
+  return 1
 }
 
 function removeAdminCert() {
@@ -64,7 +76,9 @@ function removeAdminCert() {
   # $(oc get secrets -o jsonpath='{.items[?(@.data.admin-cert)].metadata.name}')
   # to exist
 
-  os::cmd::expect_success "oc patch secret logging-elasticsearch -p '{\"data\":{\"admin-cert\": null}}'"
+  oc patch secret logging-elasticsearch -p '{"data":{"admin-cert": null}}' || return 1
+
+  return 0
 }
 
 function addTriggers() {
@@ -75,8 +89,9 @@ function addTriggers() {
   # to exist
 
   for dc in $(oc get dc -l logging-infra -o jsonpath='{.items[*].metadata.name}'); do
-    os::cmd::expect_success "oc patch dc/$dc -p '{ \"spec\": { \"triggers\": [{ \"type\" : \"ConfigChange\" }] } }'"
+    oc patch dc/$dc -p '{ "spec": { "triggers": [{ "type" : "ConfigChange" }] } }' || return 1
   done
+  return 0
 }
 
 function rebuildVersion() {
@@ -86,7 +101,7 @@ function rebuildVersion() {
   local tag=${1:-latest}
 
   for bc in $(oc get bc -l logging-infra -o jsonpath='{.items[*].metadata.name}'); do
-    os::cmd::expect_success "oc patch bc/$bc -p='{ \"spec\" : { \"output\" : { \"to\" : { \"name\" : \"'$bc':'$tag'\" } } } }'"
+    oc patch bc/$bc -p='{ "spec" : { "output" : { "to" : { "name" : "'$bc':'$tag'" } } } }' || return 1
 
     if [ "$USE_LOCAL_SOURCE" = "true" ] ; then
       oc start-build --from-dir $OS_O_A_L_DIR $bc
@@ -95,7 +110,8 @@ function rebuildVersion() {
     fi
   done
 
-  os::cmd::expect_success "wait_for_new_builds_complete"
+  wait_for_new_builds_complete && return 0
+  return 1
 }
 
 function upgrade() {
@@ -103,8 +119,7 @@ function upgrade() {
 
   local version=${1:-latest}
 
-  os::cmd::expect_success "oc new-app \
-                        logging-deployer-template \
+  oc new-app logging-deployer-template \
                         -p ENABLE_OPS_CLUSTER=$ENABLE_OPS_CLUSTER \
                         ${pvc_params} \
                         -p IMAGE_PREFIX=$imageprefix \
@@ -112,10 +127,12 @@ function upgrade() {
                         -p ES_CLUSTER_SIZE=1 \
                         -p PUBLIC_MASTER_URL=https://localhost:8443${masterurlhack} \
                         -p MODE=upgrade \
-                        -p IMAGE_VERSION=$version"
+                        -p IMAGE_VERSION=$version || return 1
 
   UPGRADE_POD=$(get_latest_pod "component=deployer")
-  os::cmd::try_until_text "oc get pods $UPGRADE_POD" "Completed" "$(( 20 * TIME_MIN ))"
+  waitFor "[[ \"Succeeded\" == \"\$(oc get pod $UPGRADE_POD -o jsonpath='{.status.phase}')\" ]]" "$(( 20 * TIME_MIN ))" && return 0
+
+  return 1
 }
 
 # verify everything is at the latest state
@@ -128,7 +145,8 @@ function upgrade() {
 # no logging-infra=support IS exist
 function verifyUpgrade() {
 
-  local checkMigrate=${1:-false}
+  local version=${1:-latest}
+  local checkMigrate=${2:-false}
 
 ### check templates and DC patched
   for template in $(oc get template -l logging-infra -o name); do
@@ -179,13 +197,21 @@ function verifyUpgrade() {
   [[ -n "$(oc get dc -l logging-infra -o jsonpath='{.items[?(@.spec.triggers[*].type)].metadata.name}')" ]] && return 1
 
 ### make sure we have everything running
-  os::cmd::try_until_text "oc get pods -l component=es" "Running" "$(( 3 * TIME_MIN ))"
-  os::cmd::try_until_text "oc get pods -l component=kibana" "Running" "$(( 3 * TIME_MIN ))"
-  os::cmd::try_until_text "oc get pods -l component=fluentd" "Running" "$(( 3 * TIME_MIN ))"
-  os::cmd::try_until_text "oc get pods -l component=curator" "Running" "$(( 3 * TIME_MIN ))"
-}
+  waitFor "[[ \"Running\" == \"\$(oc get pods -l component=es -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+  waitFor "[[ \"Running\" == \"\$(oc get pods -l component=kibana -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+  waitFor "[[ \"Running\" == \"\$(oc get pods -l component=fluentd -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+  waitFor "[[ \"Running\" == \"\$(oc get pods -l component=curator -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
 
-source "./logging.sh"
+  if [ $ENABLE_OPS_CLUSTER = true ]; then
+    waitFor "[[ \"Running\" == \"\$(oc get pods -l component=es-ops -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+    waitFor "[[ \"Running\" == \"\$(oc get pods -l component=kibana-ops -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+    waitFor "[[ \"Running\" == \"\$(oc get pods -l component=curator-ops -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" || return 1
+  fi
+
+  return 0
+}
+# this is treated differently than how it is in logging.sh -- set it to be in seconds
+TIME_MIN=60
 
 echo $TEST_DIVIDER
 # test from base install
@@ -196,7 +222,7 @@ addTriggers && \
 rebuildVersion "upgraded" && \
 
 upgrade "upgraded" && \
-verifyUpgrade true && \
+verifyUpgrade "upgraded" true && \
 
 ./e2e-test.sh $USE_CLUSTER && \
 
@@ -205,7 +231,7 @@ echo $TEST_DIVIDER
 useFluentdDC && \
 addTriggers && \
 upgrade "upgraded" && \
-verifyUpgrade && \
+verifyUpgrade "upgraded" && \
 
 ./e2e-test.sh $USE_CLUSTER && \
 exit 0
