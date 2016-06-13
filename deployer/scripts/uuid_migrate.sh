@@ -39,14 +39,14 @@ function create_context() {
   local token=$(echo -e "$output" | tail -1 | base64 -d)
 
   # set up a config context using the aggregated-logging-fluentd account and most recent token
-  oc config set-credentials aggregated-logging-fluentd-account \
+  oc adm config set-credentials aggregated-logging-fluentd-account \
     --token="$token" >& /dev/null
-  oc config set-context aggregated-logging-fluentd-context \
+  oc adm config set-context aggregated-logging-fluentd-context \
     --cluster=master \
     --user=aggregated-logging-fluentd-account \
     --namespace="${project}" >& /dev/null
 
-  oc config use-context aggregated-logging-fluentd-context
+  oc adm config use-context aggregated-logging-fluentd-context
 }
 
 function recreate_admin_certs(){
@@ -75,21 +75,23 @@ function recreate_admin_certs(){
 }
 
 function run_uuid_migration() {
-  PROJECTS=(`oc get project -o jsonpath='{.items[*].metadata.name}'`)
-  ES_PODS=$(oc get pods -l component=es -o jsonpath='{.items[?(@.status.phase == "Running")].metadata.name}')
 
-  if [[ -z "$ES_PODS" ]]; then
+  if [[ -z "$(oc get pods -l component=es -o jsonpath='{.items[?(@.status.phase == "Running")].metadata.name}')" ]]; then
     echo "No Elasticsearch pods found running.  Cannot migrate."
     echo "Scale up ES prior to running with MODE=migrate"
     exit 1
   fi
 
-  for index in "${PROJECTS[@]}"; do
+  #for index in $(oc get project -o jsonpath='{.items[*].metadata.name}' --token="$token"); do
+  #for index in $(oc get project -o jsonpath='{.items[*].metadata.name}' --as=system:serviceaccount:"$project":aggregated-logging-fluentd); do
+  for index in $(oc get project -o jsonpath='{.items[*].metadata.name}'); do
 
-    if [[ ! ( ${OPS_PROJECTS[@]} =~ $index ) ]]; then
-      uid=$(oc get project "$index" -o jsonpath='{.metadata.uid}')
-      create_alias $index $uid
-    fi
+    [[ "${OPS_PROJECTS[@]}" =~ "$index" ]] && continue
+
+    #uid=$(oc get project "$index" -o jsonpath='{.metadata.uid}' --as=system:serviceaccount:"$project":aggregated-logging-fluentd)
+    #uid=$(oc get project "$index" -o jsonpath='{.metadata.uid}' --token="$token")
+    uid=$(oc get project "$index" -o jsonpath='{.metadata.uid}')
+    create_alias $index $uid
 
   done
 }

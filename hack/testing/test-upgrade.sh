@@ -26,6 +26,11 @@ fi
 TEST_DIVIDER="------------------------------------------"
 UPGRADE_POD=""
 
+function dumpEvents() {
+  oc get events -o yaml > $ARTIFACT_DIR/all-events.yaml 2>&1
+}
+trap dumpEvents EXIT
+
 function waitFor() {
 
   local statement=$1
@@ -54,17 +59,17 @@ function useFluentdDC() {
   ops_host=$(oc get pod $fluentdpod -o jsonpath='{.spec.containers[*].env[?(@.name=="OPS_HOST")].value}')
   ops_port=$(oc get pod $fluentdpod -o jsonpath='{.spec.containers[*].env[?(@.name=="OPS_PORT")].value}')
 
-  oc delete daemonset logging-fluentd || return 1
-  oc delete template logging-fluentd-template || return 1
+  oc delete daemonset logging-fluentd
+  oc delete template logging-fluentd-template
 
   waitFor "[[ -z \"\$(oc get pod \$fluentdpod -o name)\" ]]" "$(( 3 * TIME_MIN ))"
 
   oc process -f templates/fluentd_dc.yaml \
-     -v IMAGE_PREFIX_DEFAULT=$imageprefix,OPS_HOST=$ops_host,OPS_PORT=$ops_port | oc create -f - || return 1
+     -v IMAGE_PREFIX_DEFAULT=$imageprefix,OPS_HOST=$ops_host,OPS_PORT=$ops_port | oc create -f -
 
-  oc new-app logging-fluentd-template || return 1
+  oc new-app logging-fluentd-template
 
-  oc scale dc logging-fluentd --replicas=1 || return 1
+  oc scale dc logging-fluentd --replicas=1
   waitFor "[[ \"Running\" == \"\$(oc get pods -l component=fluentd -o jsonpath='{.items[*].status.phase}')\" ]]" "$(( 3 * TIME_MIN ))" && return 0
   return 1
 }
@@ -76,7 +81,7 @@ function removeAdminCert() {
   # $(oc get secrets -o jsonpath='{.items[?(@.data.admin-cert)].metadata.name}')
   # to exist
 
-  oc patch secret logging-elasticsearch -p '{"data":{"admin-cert": null}}' || return 1
+  oc patch secret logging-elasticsearch -p '{"data":{"admin-cert": null}}'
 
   return 0
 }
@@ -89,7 +94,7 @@ function addTriggers() {
   # to exist
 
   for dc in $(oc get dc -l logging-infra -o jsonpath='{.items[*].metadata.name}'); do
-    oc patch dc/$dc -p '{ "spec": { "triggers": [{ "type" : "ConfigChange" }] } }' || return 1
+    oc patch dc/$dc -p '{ "spec": { "triggers": [{ "type" : "ConfigChange" }] } }'
   done
   return 0
 }
@@ -101,7 +106,7 @@ function rebuildVersion() {
   local tag=${1:-latest}
 
   for bc in $(oc get bc -l logging-infra -o jsonpath='{.items[*].metadata.name}'); do
-    oc patch bc/$bc -p='{ "spec" : { "output" : { "to" : { "name" : "'$bc':'$tag'" } } } }' || return 1
+    oc patch bc/$bc -p='{ "spec" : { "output" : { "to" : { "name" : "'$bc':'$tag'" } } } }'
 
     if [ "$USE_LOCAL_SOURCE" = "true" ] ; then
       oc start-build --from-dir $OS_O_A_L_DIR $bc
@@ -127,7 +132,7 @@ function upgrade() {
                         -p ES_CLUSTER_SIZE=1 \
                         -p PUBLIC_MASTER_URL=https://localhost:8443${masterurlhack} \
                         -p MODE=upgrade \
-                        -p IMAGE_VERSION=$version || return 1
+                        -p IMAGE_VERSION=$version
 
   UPGRADE_POD=$(get_latest_pod "component=deployer")
   waitFor "[[ \"Succeeded\" == \"\$(oc get pod $UPGRADE_POD -o jsonpath='{.status.phase}')\" ]]" "$(( 20 * TIME_MIN ))" && return 0
@@ -182,8 +187,11 @@ function verifyUpgrade() {
 
 ### check that migration was successful
   if [ $checkMigrate = true ]; then
-    [[ -z "$(oc logs $UPGRADE_POD | grep 'Migration for project test: {"acknowledged":true}')" ]] && return 1
-    [[ -z "$(oc logs $UPGRADE_POD | grep 'Migration for project logging: {"acknowledged":true}')" ]] && return 1
+    for project in $(oc get projects -o 'jsonpath={.items[*].metadata.name}'); do
+      [[ "default openshift openshift-infra" =~ $project ]] && continue
+      [[ -z "$(oc logs $UPGRADE_POD | grep 'Migration for project '$project': {"acknowledged":true}')" ]] && return 1
+    done
+
   fi
 
 ### check for Fluentd daemonset, no DC exists
@@ -215,26 +223,22 @@ TIME_MIN=60
 
 echo $TEST_DIVIDER
 # test from base install
-removeAdminCert && \
-removeCurator && \
-useFluentdDC && \
-addTriggers && \
-rebuildVersion "upgraded" && \
+removeAdminCert
+removeCurator
+useFluentdDC
+addTriggers
+rebuildVersion "upgraded"
 
-upgrade "upgraded" && \
-verifyUpgrade "upgraded" true && \
+upgrade "upgraded"
+verifyUpgrade "upgraded" true
 
-./e2e-test.sh $USE_CLUSTER && \
+./e2e-test.sh $USE_CLUSTER
 
 echo $TEST_DIVIDER
 # test from partial upgrade
-useFluentdDC && \
-addTriggers && \
-upgrade "upgraded" && \
-verifyUpgrade "upgraded" && \
+useFluentdDC
+addTriggers
+upgrade "upgraded"
+verifyUpgrade "upgraded"
 
-./e2e-test.sh $USE_CLUSTER && \
-exit 0
-
-oc get events -o yaml > $ARTIFACT_DIR/all-events.yaml 2>&1
-exit 1
+./e2e-test.sh $USE_CLUSTER

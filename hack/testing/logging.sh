@@ -241,6 +241,10 @@ os::cmd::expect_success "oc new-app logging-deployer-account-template"
 os::cmd::expect_success "oc policy add-role-to-user edit system:serviceaccount:logging:logging-deployer"
 os::cmd::expect_success "oc policy add-role-to-user daemonset-admin system:serviceaccount:logging:logging-deployer"
 os::cmd::expect_success "oadm policy add-cluster-role-to-user oauth-editor system:serviceaccount:logging:logging-deployer"
+
+# necessary?
+#os::cmd::expect_success "oadm policy add-cluster-role-to-user cluster-reader system:serviceaccount:logging:logging-deployer"
+
 if [ -n "$USE_LOGGING_DEPLOYER" ] ; then
     imageprefix="docker.io/openshift/origin-"
 elif [ -n "$USE_LOGGING_DEPLOYER_SCRIPT" ] ; then
